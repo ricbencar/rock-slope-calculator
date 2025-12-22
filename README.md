@@ -15,14 +15,14 @@ The calculator implements a "Multi-Model Consensus" approach. Rather than relyin
 **Manual Selection Mode:**
 The software includes an interactive logic for expert users. After the initial analysis, the script asks: *"Do you want to manually choose a stability formula? (y/n)"*. If the user inputs **True/y**, the system immediately prompts the user to select one of the specific formulas from the list below:
 
-   [1] Hudson (1959)
-   [2] Van der Meer (2021)
-   [3] Van Gent Modified (2003)
-   [4] Van Gent Simplified (2003)
-   [5] Eldrup & Andersen (2019)
-   [6] Etemad-Shahidi (2020)
-   [7] Scaravaglione Mod. VG (2025)
-   [8] Scaravaglione Mod. ES (2025)
+1.  Hudson (1959)
+2.  Van der Meer (2021)
+3.  Van Gent Modified (2003)
+4.  Van Gent Simplified (2003)
+5.  Eldrup & Andersen (2019)
+6.  Etemad-Shahidi (2020)
+7.  Scaravaglione Mod. VG (2025)
+1.  Scaravaglione Mod. ES (2025)
 
 The logic follows a rigorously defined **4-Step Process**:
 1.  **Input Processing:** Parsing wave data ($H_{m0}$, $T_{m-1,0}$), geometry (slopes, depths), and material properties (density, permeability).
@@ -520,5 +520,3 @@ The calculator code could also be updated to allow selection between **Random (B
 
 **14. Scaravaglione, G., Marino, S., Francone, A., Leone, E., Damiani, L., Tomasicchio, G. R., Van Gent, M. R. A., & Saponieri, A. (2025).** "The influence of shallow water on rock armour stability." *Coastal Engineering*, 197, 104657.  
 [https://doi.org/10.1016/j.coastaleng.2024.104657](https://doi.org/10.1016/j.coastaleng.2024.104657)
-
-```
