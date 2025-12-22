@@ -219,10 +219,14 @@ The **Van Gent Modified (2003)** formulation represents a targeted recalibration
 A further critical refinement in this formulation is the strict adherence to the **spectral energy period**, rather than the peak period or mean period used in earlier works. This choice is physically robust for shallow water environments where the energy spectrum often becomes double-peaked or flattened due to triad wave interactions and surf beat. By basing the surf similarity parameter on this spectral period, the formula ensures that the hydraulic response—whether plunging or surging—is characterized by the wave components that actually carry the bulk of the destructive energy. The formulation retains the dual-regime logic of Van der Meer, providing distinct coefficients for plunging waves (dominated by void extraction) and surging waves (dominated by uplift), but **recalibrates these coefficients to 8.4 and 1.3** respectively to better align with the shallow water experimental data. This makes the formula particularly valuable for design scenarios in the **"transitional" depth zone** where waves are shoaling heavily but not yet fully saturated bores, a region where other formulas may underestimate the required armor mass.
 
 **Modified Plunging ($\xi_{m-1,0} < \xi_{cr}$):**
-$$\frac{H_s}{\Delta D_{n50}} = 8.4 P^{0.18} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H_{2\%}} \right) \xi_{m-1,0}^{-0.5}$$
+$$
+\frac{H_s}{\Delta D_{n50}} = 8.4 P^{0.18} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H_{2\%}} \right) \xi_{m-1,0}^{-0.5}
+$$
 
 **Modified Surging ($\xi_{m-1,0} \ge \xi_{cr}$):**
-$$\frac{H_s}{\Delta D_{n50}} = 1.3 P^{-0.13} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H_{2\%}} \right) \sqrt{\cot \alpha} \xi_{m-1,0}^{P}$$
+$$
+\frac{H_s}{\Delta D_{n50}} = 1.3 P^{-0.13} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H_{2\%}} \right) \sqrt{\cot \alpha} \xi_{m-1,0}^{P}
+$$
 
 *(Notes: The Rock Manual suggests using optimized coefficients closer to $c_{pl(mod)} = 8.4$ and $c_{s(mod)} = 1.3$ when the explicit wave height ratio $H_{2\%}/H_{s}$ is included. Exact formulation may vary slightly between subsequent publications or recalibrations).*
 
