@@ -1,6 +1,3 @@
-Here is the complete `README.md` file, formatted in Markdown with LaTeX support, including the **bolded text** adjustments from the previous step and the **corrected LaTeX formulas** for the Van Gent Modified section to ensure proper rendering.
-
-```markdown
 # ROCK SLOPE STABILITY CALCULATOR
 
 ## 1. Technical Overview and Scientific Context
