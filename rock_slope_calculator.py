@@ -942,7 +942,7 @@ class IntelligentDesignEngine:
             # --- CUSTOM POWER LAW CALCULATION ---
             # Used when standard grading is disabled.
             # Using 'x' as Theoretical Required W (in kN)
-            x_val = target_weight_kn
+            x_val = target_mass
             
             # Grading Min Params (Formula Coefficients)
             a_min = 1.056832014477894E+00
@@ -1007,7 +1007,7 @@ class IntelligentDesignEngine:
                  return
         else:
             # Custom Approach for Underlayer (Same Logic as Main Armor)
-            x_val_ul = target_weight_kn_ul
+            x_val_ul = target_mass_ul
             
             # Grading Min Params
             a_min = 1.056832014477894E+00

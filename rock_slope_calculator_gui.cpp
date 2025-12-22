@@ -728,7 +728,7 @@ public:
         if (!grading_EN13383 || !ld.design_valid) {
              ld.grading_name = is_armor ? "Custom Grading" : "Custom Grading Underlayer";
              
-             double x_val = ld.target_W_kN;
+             double x_val = ld.target_M50_kg;
              
              // Grading Min Params
              double a_min = 1.056832014477894E+00;
