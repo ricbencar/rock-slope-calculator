@@ -46,7 +46,7 @@ The transition to the **Van der Meer formulae** (1988) marked a paradigm shift, 
 However, original derivations relied on the mean wave period ($T_m$) and were constrained largely to deep-water conditions where the Rayleigh distribution of wave heights holds valid.
 
 **Spectral Characterization and Shallow Water Complexity:**
-Contemporary coastal engineering has moved toward spectral characterization, utilizing the spectral energy period ($T_{m-1,0}$) to better account for bimodal seas and shallow water spectral flattening. In shallow water, the wave height distribution deviates from Rayleigh, and the shape of the spectrum changes due to triad wave interactions. This necessitates formulas that include parameters like the wave height ratio ($H_{2\%}/H_s$) or physical permeability coefficients ($C_p$) rather than notional ones.
+Contemporary coastal engineering has moved toward spectral characterization, utilizing the spectral energy period ($T_{m-1,0}$) to better account for bimodal seas and shallow water spectral flattening. In shallow water, the wave height distribution deviates from Rayleigh, and the shape of the spectrum changes due to triad wave interactions. This necessitates formulas that include parameters like the wave height ratio ($H<sub>2%</sub>/H_s$) or physical permeability coefficients ($C_p$) rather than notional ones.
 
 **The "Permissible Damage" Philosophy:**
 Modern design does not seek "zero movement" but rather "permissible damage" over a service life. This probabilistic approach acknowledges that granular structures are flexible. They can reshape under extreme loads without catastrophic failure, unlike rigid concrete structures. The calculator's use of the damage parameter ($S_d$) allows engineers to design for specific performance levels, from "Start of Damage" to "Intermediate Damage" (reshaping).
@@ -87,12 +87,12 @@ This definition places greater weight on the lower frequency components of the s
 **Note on Jonswap Spectra:** For a standard Jonswap spectrum, the relationship between the spectral energy period $T_{m-1,0}$ and the peak period $T_p$ can be approximated by:
 $$T_p \approx 1.1 \cdot T_{m-1,0}$$
 
-### Wave Height Distribution and $H_{2\%}$
-The parameter $H_{2\%}$ represents the wave height exceeded by 2% of the waves in a storm record. In deep water, wave heights generally follow a Rayleigh distribution, where the relationship is constant:
+### Wave Height Distribution and $H<sub>2%</sub>$
+The parameter $H<sub>2%</sub>$ represents the wave height exceeded by 2% of the waves in a storm record. In deep water, wave heights generally follow a Rayleigh distribution, where the relationship is constant:
 
-$$\frac{H_{2\%}}{H_{s}} \approx 1.4$$
+$$\frac{H<sub>2%</sub>}{H_{s}} \approx 1.4$$
 
-In shallow water, this ratio changes dynamically. As waves enter the shoaling zone, the distribution broadens, and the ratio may drop to nearly 1.2 near the breaker line before recovering. The "Van Gent Modified" formula (2003) explicitly utilizes $H_{2\%}$. However, predicting $H_{2\%}$ accurately without physical modelling is fraught with uncertainty. Because of this epistemic uncertainty, this calculator generally favors the rewritten formulae based on $H_{m0}$ and $T_{m-1,0}$ for design, using $H_{2\%}$ based methods only for comparative verification.
+In shallow water, this ratio changes dynamically. As waves enter the shoaling zone, the distribution broadens, and the ratio may drop to nearly 1.2 near the breaker line before recovering. The "Van Gent Modified" formula (2003) explicitly utilizes $H<sub>2%</sub>$. However, predicting $H<sub>2%</sub>$ accurately without physical modelling is fraught with uncertainty. Because of this epistemic uncertainty, this calculator generally favors the rewritten formulae based on $H_{m0}$ and $T_{m-1,0}$ for design, using $H<sub>2%</sub>$ based methods only for comparative verification.
 
 ### The Role of Foreshore and Water Depth
 The geometry of the foreshore is a critical input. The calculator requires the local water depth at the toe of the structure ($h_{toe}$) and the foreshore slope ($m$). These define the **Relative Depth Ratio**:
@@ -108,7 +108,7 @@ This dimensionless parameter acts as the primary switch in the calculator's algo
 The calculator divides the coastal profile into four distinct zones based on the latest research by *Van der Meer et al. (2024)* and *Scaravaglione et al. (2025)*:
 
 * **Zone 1: Deep / Intermediate Water ($h/H_{m0} > 3.0$)**
-    * **Physics:** Rayleigh wave distribution ($H_{2\%}/H_s \approx 1.4$). No depth-induced breaking.
+    * **Physics:** Rayleigh wave distribution ($H<sub>2%</sub>/H_s \approx 1.4$). No depth-induced breaking.
     * **Recommended Formula:** **[2] Van der Meer (2021)**.
     * **Rationale:** The rewritten formula using spectral period $T_{m-1,0}$ is the industry standard for non-depth-limited conditions.
 
@@ -211,7 +211,7 @@ $$N_s = 0.97 \cdot P^{-0.13} \cdot \left(\frac{S}{\sqrt{N}}\right)^{0.2} \cdot \
 **Explanation:**
 * **Purpose:** To provide a scientifically rigorous stability prediction that accounts for the influence of wave period, permeability, and storm duration in deep to intermediate water.
 * **Capabilities:** It is the **current state-of-the-art for standard breakwater design**. By using $T_{m-1,0}$, it handles bimodal spectra effectively. It accurately predicts the transition from erosive (plunging) failure to sliding (surging) failure.
-* **Limitations:** It assumes a **Rayleigh wave height distribution ($H_{2\%}/H_s \approx 1.4$)**. In shallow water where waves are depth-limited and the distribution is truncated, this assumption may lead to inaccuracies if not corrected.
+* **Limitations:** It assumes a **Rayleigh wave height distribution ($H<sub>2%</sub>/H_s \approx 1.4$)**. In shallow water where waves are depth-limited and the distribution is truncated, this assumption may lead to inaccuracies if not corrected.
 
 ### [3] Van Gent Modified (2003)
 The **Van Gent Modified (2003)** formulation represents a targeted recalibration of the original Van der Meer equations, specifically engineered to address the hydrodynamic complexities of **shallow foreshores** where standard deep-water assumptions fail. Originating from the experimental insights of Smith et al. (2002) and rigorously extended by Van Gent et al. (2003), this method utilized a specialized dataset of 207 physical model tests conducted with 1:30 and 1:100 foreshore slopes. The primary scientific motivation was to correct the inaccuracies observed when applying Rayleigh-based stability models to depth-limited wave conditions. In deep water, the ratio of the exceedance wave height to the significant wave height is constant at approximately 1.4; however, as waves propagate onto a shallow foreshore, **depth-induced breaking truncates the wave height distribution**, significantly reducing this ratio. The Van Gent Modified formula explicitly integrates this ratio as a governing parameter with an inverse relationship (exponent -1), thereby dynamically adjusting the calculated stability based on the actual statistical distribution of the wave field at the structure's toe.
@@ -220,22 +220,22 @@ A further critical refinement in this formulation is the strict adherence to the
 
 **Modified Plunging ($\xi_{m-1,0} < \xi_{cr}$):**
 $$
-\frac{H_s}{\Delta D_{n50}} = 8.4 P^{0.18} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H_{2\%}} \right) \xi_{m-1,0}^{-0.5}
+\frac{H_s}{\Delta D_{n50}} = 8.4 P^{0.18} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H<sub>2%</sub>} \right) \xi_{m-1,0}^{-0.5}
 $$
 
 **Modified Surging ($\xi_{m-1,0} \ge \xi_{cr}$):**
 $$
-\frac{H_s}{\Delta D_{n50}} = 1.3 P^{-0.13} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H_{2\%}} \right) \sqrt{\cot \alpha} \xi_{m-1,0}^{P}
+\frac{H_s}{\Delta D_{n50}} = 1.3 P^{-0.13} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H<sub>2%</sub>} \right) \sqrt{\cot \alpha} \xi_{m-1,0}^{P}
 $$
 
-*(Notes: The Rock Manual suggests using optimized coefficients closer to $c_{pl(mod)} = 8.4$ and $c_{s(mod)} = 1.3$ when the explicit wave height ratio $H_{2\%}/H_{s}$ is included. Exact formulation may vary slightly between subsequent publications or recalibrations).*
+*(Notes: The Rock Manual suggests using optimized coefficients closer to $c_{pl(mod)} = 8.4$ and $c_{s(mod)} = 1.3$ when the explicit wave height ratio $H<sub>2%</sub>/H_{s}$ is included. Exact formulation may vary slightly between subsequent publications or recalibrations).*
 
 **Explanation:**
 * **Purpose:** Developed to improve the accuracy of rock slope design in water depth conditions more limited than those in Van der Meer's original dataset. It incorporates the influence of foreshore breaking and water depth.
 * **Capabilities:**
     * **Spectral Period:** Uses **$T_{m-1,0}$ instead of $T_m$ or $T_p$**, making it suitable for bimodal spectra or flat energy spectra occurring in shallow water with intense breaking.
-    * **Wave Transformation:** explicit inclusion of the ratio **$H_{2\%}/H_{s}$** as a parameter to reflect wave transformation and the deviation from the Rayleigh distribution in shallow water.
-* **Limitations:** Requires accurate knowledge of **$H_{2\%}$**, which is difficult to estimate without numerical or physical modeling.
+    * **Wave Transformation:** explicit inclusion of the ratio **$H<sub>2%</sub>/H_{s}$** as a parameter to reflect wave transformation and the deviation from the Rayleigh distribution in shallow water.
+* **Limitations:** Requires accurate knowledge of **$H<sub>2%</sub>$**, which is difficult to estimate without numerical or physical modeling.
 
 ### [4] Van Gent Simplified (2003)
 The **Van Gent Simplified (2003)** formula was developed as a pragmatic design tool specifically tailored for coastal structures situated on **shallow foreshores**, where complex wave transformations render standard deep-water assumptions invalid. Unlike the comprehensive Van der Meer equations which rely on deep-water spectral characteristics, this formulation addresses the specific hydraulic reality of the **surf zone** where waves have already undergone significant shoaling and breaking before reaching the structure. It was derived from an extensive series of physical model tests focused on verifying the validity of stability predictions in conditions where the ratio of water depth to wave height is low, providing a specialized alternative for designs where the foreshore bathymetry plays a dominant role in filtering the incoming wave energy.
@@ -444,7 +444,7 @@ The calculator code could also be updated to allow selection between **Random (B
 * **$H_{1/3}$**: Significant wave height derived from time-domain analysis (average of the highest 1/3 of waves).
 * **$H_{1/10}$**: Average wave height of the highest 10% of waves.
 * **$H_{1/50}$**: Average wave height of the highest 50 waves in the record (Vidal).
-* **$H_{2\%}$**: Wave height exceeded by 2% of the waves in the record.
+* **$H<sub>2%</sub>$**: Wave height exceeded by 2% of the waves in the record.
 * **$H_{50}$**: Average wave height of the 50 highest waves (Etemad-Shahidi/Vidal notation).
 * **$H_{m0}$**: Spectral significant wave height, defined as $4\sqrt{m_0}$.
 * **$H_{m0,deep}$**: Spectral significant wave height in deep water.
