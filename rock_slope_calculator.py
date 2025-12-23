@@ -941,7 +941,7 @@ class IntelligentDesignEngine:
         else:
             # --- CUSTOM POWER LAW CALCULATION ---
             # Used when standard grading is disabled.
-            # Using 'x' as Theoretical Required W (in kN)
+            # Using 'x' as Theoretical Required M50 (in kg)
             x_val = target_mass
             
             # Grading Min Params (Formula Coefficients)
