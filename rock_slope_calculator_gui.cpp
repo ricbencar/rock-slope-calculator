@@ -689,6 +689,7 @@ public:
         double gamma_r = defaults.rho_r * G / 1000.0;
         bool grading_EN13383 = defaults.use_en13383;
         
+        // --- EN 13383 Standard Grading Logic ---
         if (grading_EN13383) {
             // Find standard grading
             GradingDef selected = {"", 0,0,0};
@@ -724,31 +725,46 @@ public:
             }
         } 
         
-        // Custom Power Law Calculation
+        // --- Custom Power Law Calculation ---
         if (!grading_EN13383 || !ld.design_valid) {
              ld.grading_name = is_armor ? "Custom Grading" : "Custom Grading Underlayer";
              
+             // Using 'x' as Theoretical Required M50 (in kg)
              double x_val = ld.target_M50_kg;
              
+             // --- MINIMUM LIMIT ---
              // Grading Min Params
              double a_min = 1.056832014477894E+00;
              double b_min = 1.482769823574055E+00;
              double c_min = -2.476127406338004E-01;
              
-             ld.w_min_kn = x_val * a_min / (1.0 + std::pow(x_val / b_min, c_min));
+             // Calculate Scaling Factor (Dimensionless Ratio)
+             double factor_min = a_min / (1.0 + std::pow(x_val / b_min, c_min));
              
+             // Calculate Mass first (kg), then Weight (kN)
+             // This ensures the 'requires weights in kgs' rule is applied correctly
+             double w_min_kg_calc = target_mass * factor_min;
+             ld.w_min_kn = (w_min_kg_calc * G) / 1000.0;
+             
+             // --- MAXIMUM LIMIT ---
              // Grading Max Params
              double a_max = 1.713085676568561E+00;
              double b_max = 2.460481255856126E+05;
              double c_max = 1.327263214034671E-01;
              
-             ld.w_max_kn = x_val * a_max / (1.0 + std::pow(x_val / b_max, c_max));
+             // Calculate Scaling Factor (Dimensionless Ratio)
+             double factor_max = a_max / (1.0 + std::pow(x_val / b_max, c_max));
              
-             ld.w_mean_kn = x_val;
+             // Calculate Mass first (kg), then Weight (kN)
+             double w_max_kg_calc = target_mass * factor_max;
+             ld.w_max_kn = (w_max_kg_calc * G) / 1000.0;
+             
+             // --- DESIGN VALUES ---
+             ld.w_mean_kn = ld.target_W_kN;
              ld.m_mean_kg = target_mass;
              ld.actual_dn = target_dn;
-             ld.w_min_kg = (ld.w_min_kn * 1000.0) / G;
-             ld.w_max_kg = (ld.w_max_kn * 1000.0) / G;
+             ld.w_min_kg = w_min_kg_calc;
+             ld.w_max_kg = w_max_kg_calc;
              ld.design_valid = true;
         }
 

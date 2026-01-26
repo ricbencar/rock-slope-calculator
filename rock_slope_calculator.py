@@ -942,24 +942,37 @@ class IntelligentDesignEngine:
             # --- CUSTOM POWER LAW CALCULATION ---
             # Used when standard grading is disabled.
             # Using 'x' as Theoretical Required M50 (in kg)
-            x_val = target_mass
+            x_val = target_mass  # Input 'x' is Mass in kg
+            g = CoastalConstants.G
             
-            # Grading Min Params (Formula Coefficients)
+            # --- MINIMUM LIMIT ---
+            # Grading Min Params
             a_min = 1.056832014477894E+00
             b_min = 1.482769823574055E+00
             c_min = -2.476127406338004E-01
             
-            # Formula: (Theoretical Required W) * a/(1+(x/b)**c)
-            w_min_kn = target_weight_kn * a_min / (1 + (x_val / b_min)**c_min)
+            # Calculate Scaling Factor (Dimensionless Ratio)
+            factor_min = a_min / (1 + (x_val / b_min)**c_min)
             
-            # Grading Max Params (Formula Coefficients)
+            # Calculate Mass first (kg), then Weight (kN)
+            # This ensures the 'requires weights in kgs' rule is applied correctly
+            w_min_kg_calc = target_mass * factor_min
+            w_min_kn = (w_min_kg_calc * g) / 1000.0
+            
+            # --- MAXIMUM LIMIT ---
+            # Grading Max Params
             a_max = 1.713085676568561E+00
             b_max = 2.460481255856126E+05
             c_max = 1.327263214034671E-01
             
-            w_max_kn = target_weight_kn * a_max / (1 + (x_val / b_max)**c_max)
+            # Calculate Scaling Factor (Dimensionless Ratio)
+            factor_max = a_max / (1 + (x_val / b_max)**c_max)
             
-            # Design values based on target
+            # Calculate Mass first (kg), then Weight (kN)
+            w_max_kg_calc = target_mass * factor_max
+            w_max_kn = (w_max_kg_calc * g) / 1000.0
+            
+            # --- DESIGN VALUES ---
             w_mean_kn = target_weight_kn
             m_mean_kg = target_mass
             actual_dn = target_dn

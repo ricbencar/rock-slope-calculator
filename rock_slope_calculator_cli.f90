@@ -854,34 +854,44 @@ CONTAINS
             END IF
         END IF
         
-        IF (.NOT. in%use_en13383 .OR. .NOT. ld%design_valid) THEN
+    IF (.NOT. in%use_en13383 .OR. .NOT. ld%design_valid) THEN
             IF (is_armor) THEN
                 ld%grading_name = "Custom Grading"
             ELSE
                 ld%grading_name = "Custom Grading Underlayer"
             END IF
             
-            x_val = ld%target_W_kN
+            ! --- CUSTOM POWER LAW CALCULATION ---
+            ! Used when standard grading is disabled.
+            ! Using 'x' as Theoretical Required M50 (in kg)
+            x_val = target_mass
             
-            ! Grading Min Params
+            ! Grading Min Params (Formula Coefficients)
             a_min = 1.056832014477894E+00_dp
             b_min = 1.482769823574055E+00_dp
             c_min = -2.476127406338004E-01_dp
             
-            ld%w_min_kn = x_val * a_min / (1.0_dp + (x_val / b_min)**c_min)
+            ! Calculate Mass Limit (kg) first, then convert to Weight (kN)
+            ! Formula: Weight_Min_kN = (Target_Mass_kg * Factor) * g / 1000
+            ld%w_min_kn = (target_mass * (a_min / (1.0_dp + (x_val / b_min)**c_min))) * g / 1000.0_dp
             
-            ! Grading Max Params
+            ! Grading Max Params (Formula Coefficients)
             a_max = 1.713085676568561E+00_dp
             b_max = 2.460481255856126E+05_dp
             c_max = 1.327263214034671E-01_dp
             
-            ld%w_max_kn = x_val * a_max / (1.0_dp + (x_val / b_max)**c_max)
+            ! Calculate Mass Limit (kg) first, then convert to Weight (kN)
+            ld%w_max_kn = (target_mass * (a_max / (1.0_dp + (x_val / b_max)**c_max))) * g / 1000.0_dp
             
-            ld%w_mean_kn = x_val
+            ! Design values based on target
+            ld%w_mean_kn = ld%target_W_kN
             ld%m_mean_kg = target_mass
             ld%actual_dn = target_dn
+            
+            ! Back-calculate kg for display
             ld%w_min_kg = (ld%w_min_kn * 1000.0_dp) / g
             ld%w_max_kg = (ld%w_max_kn * 1000.0_dp) / g
+            
             ld%design_valid = .TRUE.
         END IF
         
@@ -985,40 +995,56 @@ CONTAINS
             WRITE(str_buf, '(F0.2)') report%hydro%rel_depth
             CALL add_justification(report, "   The structure is located in deep water relative to the wave height (h/Hm0 = " // &
                 TRIM(str_buf) // " > 3.0).")
-            CALL add_justification(report, "   In this regime, the wave height distribution strictly follows the **Rayleigh distribution**.")
+            CALL add_justification(report, "   In this regime, the wave height distribution strictly follows &
+                &the **Rayleigh distribution**.")
             CALL add_justification(report, "   Key characteristics:")
             CALL add_justification(report, "     * The ratio H2%/Hs is constant at approximately 1.4.")
-            CALL add_justification(report, "     * Wave breaking is limited to whitecapping or direct interaction with the armor layer.")
-            CALL add_justification(report, "     * The spectral shape is standard (JONSWAP/Pierson-Moskowitz), and energy transfer to low-frequencies is minimal.")
+            CALL add_justification(report, "     * Wave breaking is limited to whitecapping or direct interaction &
+                &with the armor layer.")
+            CALL add_justification(report, "     * The spectral shape is standard (JONSWAP/Pierson-Moskowitz), &
+                &and energy transfer to low-frequencies is minimal.")
             CALL add_justification(report, "")
             CALL add_justification(report, "### 2. FORMULA COMPARISON & ANALYSIS")
             
             ! Van der Meer
             CALL add_justification(report, "   **A. Van der Meer (2021 Rewritten) [RECOMMENDED]**")
             CALL add_justification(report, "      * **Advantages:** This formula is the modernized industry standard.")
-            CALL add_justification(report, "        Van der Meer (2021) rewrote the original formula to use the spectral period (Tm-1,0),")
+            CALL add_justification(report, "        Van der Meer (2021) rewrote the original formula to use the &
+                &spectral period (Tm-1,0),")
+            
             CALL add_justification(report, "        eliminating the influence of spectral shape.")
-            CALL add_justification(report, "        Van der Meer et al. (2024) confirmed its validity for h/Hm0 > 1.5, preferring Hm0 over H1/3 for nonlinear waves.")
-            CALL add_justification(report, "      * **Physics:** It correctly assumes a Rayleigh distribution of wave heights, aligning with the actual deep-water statistics.")
+            CALL add_justification(report, "        Van der Meer et al. (2024) confirmed its validity for h/Hm0 > 1.5, &
+                &preferring Hm0 over H1/3 for nonlinear waves.")
+            CALL add_justification(report, "      * **Physics:** It correctly assumes a Rayleigh distribution of wave heights, &
+                &aligning with the actual deep-water statistics.")
 
             ! Van Gent Mod
             CALL add_justification(report, "   **B. Van Gent Modified (2003)**")
             CALL add_justification(report, "      * **Context:** This formula incorporates the ratio H2%/Hs.")
-            CALL add_justification(report, "        In deep water, with H2%/Hs = 1.4, this formula essentially converges closely with the Van der Meer predictions.")
-            CALL add_justification(report, "        However, its specific calibration was focused on the effects of shallow foreshores.")
+            CALL add_justification(report, "        In deep water, with H2%/Hs = 1.4, this formula essentially &
+                &converges closely with the Van der Meer predictions.")
+            CALL add_justification(report, "        However, its specific calibration was focused on the effects &
+                &of shallow foreshores.")
 
             ! Etemad-Shahidi
             CALL add_justification(report, "   **C. Etemad-Shahidi (2020)**")
-            CALL add_justification(report, "      * **Comparison:** Etemad-Shahidi (2020) provides a robust formula validated for both deep and shallow water.")
-            CALL add_justification(report, "        It introduces a physical permeability parameter (D_core/D_armor) to replace the nominal P factor,")
-            CALL add_justification(report, "        reducing uncertainty. However, Van der Meer remains the primary standard for deep water.")
+            CALL add_justification(report, "      * **Comparison:** Etemad-Shahidi (2020) provides a robust formula &
+                &validated for both deep and shallow water.")
+            CALL add_justification(report, "        It introduces a physical permeability parameter (D_core/D_armor) &
+                &to replace the nominal P factor,")
+            CALL add_justification(report, "        reducing uncertainty. However, Van der Meer remains the primary &
+                &standard for deep water.")
 
             IF (es%valid .AND. vdm%valid .AND. vdm%Dn50 > 0.0_dp) THEN
                 IF (ABS(vdm%Dn50 - es%Dn50) / vdm%Dn50 > 0.10_dp) THEN
-                    CALL add_justification(report, "      * **Note on Divergence:** The result deviates from Van der Meer here. This typically occurs in the 'transition zone'")
-                    CALL add_justification(report, "        of the surf similarity parameter (xi approx 2.0 - 4.5). Etemad-Shahidi transitions to Surging physics")
-                    CALL add_justification(report, "        earlier (xi > 1.8), predicting higher stability, whereas Van der Meer maintains Plunging physics")
-                    CALL add_justification(report, "        (lower stability) until a higher critical threshold. Van der Meer is more conservative here.")
+                    CALL add_justification(report, "      * **Note on Divergence:** The result deviates from Van der Meer &
+                        &here. This typically occurs in the 'transition zone'")
+                    CALL add_justification(report, "        of the surf similarity parameter (xi approx 2.0 - 4.5). &
+                        &Etemad-Shahidi transitions to Surging physics")
+                    CALL add_justification(report, "        earlier (xi > 1.8), predicting higher stability, &
+                        &whereas Van der Meer maintains Plunging physics")
+                    CALL add_justification(report, "        (lower stability) until a higher critical threshold. &
+                        &Van der Meer is more conservative here.")
                 ELSE
                     CALL add_justification(report, "        It typically converges with Van der Meer here.")
                 END IF
@@ -1045,34 +1071,46 @@ CONTAINS
                 " <= 3.0).")
             CALL add_justification(report, "   Key characteristics:")
             CALL add_justification(report, "     * **Spectral Truncation:** The largest waves in the spectrum break on the foreshore.")
-            CALL add_justification(report, "     * **Distribution Shift:** The wave height distribution deviates from Rayleigh; H2%/Hm0 drops below 1.4.")
-            CALL add_justification(report, "     * **Shoaling:** Significant shoaling modifies the wave shape before impact, creating peaked crests and flat troughs.")
+            CALL add_justification(report, "     * **Distribution Shift:** The wave height distribution deviates from &
+                &Rayleigh; H2%/Hm0 drops below 1.4.")
+            CALL add_justification(report, "     * **Shoaling:** Significant shoaling modifies the wave shape before impact, &
+                &creating peaked crests and flat troughs.")
             CALL add_justification(report, "")
             CALL add_justification(report, "### 2. FORMULA COMPARISON & ANALYSIS")
             
             ! VdM
             CALL add_justification(report, "   **A. Van der Meer (2021)**")
-            CALL add_justification(report, "      * **Advantages:** Van der Meer et al. (2024) extensively re-analyzed shallow water data and concluded")
-            CALL add_justification(report, "        that the rewritten Van der Meer formula (using Tm-1,0) is valid down to h/Hm0 = 1.5.")
-            CALL add_justification(report, "        It performs reasonably well, with slightly less reliability in the 1.0 < h/Hm0 < 1.5 range.")
-            CALL add_justification(report, "      * **Note:** For nonlinear waves in this zone, using Hm0 is preferred over H1/3 for nonlinear waves to avoid deviations.")
+            CALL add_justification(report, "      * **Advantages:** Van der Meer et al. (2024) extensively re-analyzed &
+                &shallow water data and concluded")
+            CALL add_justification(report, "        that the rewritten Van der Meer formula (using Tm-1,0) is valid &
+                &down to h/Hm0 = 1.5.")
+        
+            CALL add_justification(report, "        It performs reasonably well, with slightly less reliability in the &
+                &1.0 < h/Hm0 < 1.5 range.")
+            CALL add_justification(report, "      * **Note:** For nonlinear waves in this zone, using Hm0 is preferred &
+                &over H1/3 for nonlinear waves to avoid deviations.")
 
             ! VG Mod
             CALL add_justification(report, "   **B. Van Gent Modified (2003)**")
-            CALL add_justification(report, "      * **Constraint:** This formula explicitly relies on the ratio H2%/Hs. Research by Van der Meer et al. (2024)")
-            CALL add_justification(report, "        highlights that predicting H2% accurately in this transition zone (where the ratio dips to ~1.2)")
-            CALL add_justification(report, "        is notoriously inaccurate without physical modeling. The formula is valid, but the input uncertainty is high.")
+            CALL add_justification(report, "      * **Constraint:** This formula explicitly relies on the ratio H2%/Hs. &
+                &Research by Van der Meer et al. (2024)")
+            CALL add_justification(report, "        highlights that predicting H2% accurately in this transition zone &
+                &(where the ratio dips to ~1.2)")
+            CALL add_justification(report, "        is notoriously inaccurate without physical modeling. The formula is valid, &
+                &but the input uncertainty is high.")
 
             ! VG Simp
             CALL add_justification(report, "   **C. Van Gent et al. (2003) Simplified**")
             CALL add_justification(report, "      * **Context:** This formula was specifically derived for shallow foreshores.")
-            CALL add_justification(report, "        However, Van der Meer et al. (2024) found that the simplified formula often does not match the data")
+            CALL add_justification(report, "        However, Van der Meer et al. (2024) found that the simplified formula &
+                &often does not match the data")
             CALL add_justification(report, "        in the surging domain as well as the rewritten Van der Meer formula.")
             
             CALL add_justification(report, "")
             CALL add_justification(report, "### 3. FINAL JUSTIFICATION")
             CALL add_justification(report, "   **Use [Van der Meer (2021 Rewritten)]**.")
-            CALL add_justification(report, "   Recent research (2024) confirms its validity in this depth range (h/Hm0 > 1.5), favoring it over simplified methods")
+            CALL add_justification(report, "   Recent research (2024) confirms its validity in this depth range (h/Hm0 > 1.5), &
+                &favoring it over simplified methods")
             CALL add_justification(report, "   due to the uncertainties in predicting H2% required for the Van Gent Modified formula.")
 
         ELSEIF (report%hydro%rel_depth > 0.5_dp) THEN
@@ -1086,46 +1124,60 @@ CONTAINS
                     " <= 1.5).")
                 CALL add_justification(report, "   Key characteristics:")
                 CALL add_justification(report, "     * **Severe Breaking:** Waves are constantly breaking.")
-                CALL add_justification(report, "     * **Saturation:** Wave height is depth-limited (H ~ 0.5h). Increasing offshore energy does not increase load.")
-                CALL add_justification(report, "     * **Infragravity Dominance:** Scaravaglione et al. (2025) and VdM (2024) note that infragravity waves")
+                CALL add_justification(report, "     * **Saturation:** Wave height is depth-limited (H ~ 0.5h). &
+                    &Increasing offshore energy does not increase load.")
+                CALL add_justification(report, "     * **Infragravity Dominance:** Scaravaglione et al. (2025) and VdM (2024) &
+                    &note that infragravity waves")
                 CALL add_justification(report, "       begin to dominate the spectrum, causing Tm-1,0 to increase massively (up to 4x).")
-                CALL add_justification(report, "     * **Formula Deviation:** Standard formulas fail here because the stability curves flatten out (Horizontal Trend).")
+                CALL add_justification(report, "     * **Formula Deviation:** Standard formulas fail here because the stability &
+                    &curves flatten out (Horizontal Trend).")
                 CALL add_justification(report, "")
                 CALL add_justification(report, "### 2. FORMULA COMPARISON & ANALYSIS")
-                
+               
                 CALL add_justification(report, "   **A. Standard Formulas (VdM, VG, Standard ES)**")
-                CALL add_justification(report, "      * **Failure Mode:** Scaravaglione et al. (2025) demonstrated that these formulas fail to converge here.")
-                CALL add_justification(report, "        Using the inflated spectral period results in over-predicted stability (for surging) or under-predicted (for plunging).")
+                CALL add_justification(report, "      * **Failure Mode:** Scaravaglione et al. (2025) demonstrated that these &
+                    &formulas fail to converge here.")
+                CALL add_justification(report, "        Using the inflated spectral period results in over-predicted stability &
+                    &(for surging) or under-predicted (for plunging).")
                 
                 CALL add_justification(report, "   **B. Scaravaglione (Modified ES 2025) [RECOMMENDED]**")
-                CALL add_justification(report, "      * **Advantages:** This formula explicitly **decouples** the wave steepness term (s^0.05) from the structure slope term.")
-                CALL add_justification(report, "      * **Physics:** It is calibrated specifically for surging/bore-like waves in the surf zone using new coefficients (c_ES,new=3.55).")
-                CALL add_justification(report, "      * **Safety Cap Applied:** The formula has a weak dependence on steepness. For very long swells, it may predict")
-                CALL add_justification(report, "        theoretically high stability (Kd > 10). This system has capped Kd at 5.0 to ensure physical realism.")
+                CALL add_justification(report, "      * **Advantages:** This formula explicitly **decouples** the wave steepness &
+                    &term (s^0.05) from the structure slope term.")
+                CALL add_justification(report, "      * **Physics:** It is calibrated specifically for surging/bore-like waves &
+                    &in the surf zone using new coefficients (c_ES,new=3.55).")
+                CALL add_justification(report, "      * **Safety Cap Applied:** The formula has a weak dependence on steepness. &
+                    &For very long swells, it may predict")
+                CALL add_justification(report, "        theoretically high stability (Kd > 10). This system has capped Kd at 5.0 &
+                    &to ensure physical realism.")
                 
                 CALL add_justification(report, "")
                 CALL add_justification(report, "### 3. FINAL JUSTIFICATION")
                 CALL add_justification(report, "   **Use [Scaravaglione (Modified ES 2025)]**.")
-                CALL add_justification(report, "   This represents the state-of-the-art for broken waves in very shallow water, correcting the overestimation of damage.")
+                CALL add_justification(report, "   This represents the state-of-the-art for broken waves in very shallow water, &
+                    &correcting the overestimation of damage.")
             ELSE
                 report%recommended = vg_simp
                 CALL add_justification(report, "### 1. HYDRAULIC CONTEXT: Very Shallow Water (Surf Zone) (Plunging)")
                 CALL add_justification(report, "   The structure is in the surf zone, but conditions are **Plunging** (xi < 1.8).")
                 CALL add_justification(report, "   The Modified ES formula is only calibrated for surging/bore conditions.")
+               
                 CALL add_justification(report, "")
                 CALL add_justification(report, "### 3. FINAL JUSTIFICATION")
                 CALL add_justification(report, "   **Use [Van Gent Simplified (2003)]**.")
-                CALL add_justification(report, "   It acts as a robust fallback. Caution is advised as damage may be underpredicted for impermeable structures.")
+                CALL add_justification(report, "   It acts as a robust fallback. Caution is advised as damage may be underpredicted &
+                    &for impermeable structures.")
             END IF
         ELSE
             ! ZONE 4: Swash
             report%recommended = mod_vg
             WRITE(str_buf, '(F0.2)') report%hydro%rel_depth
             CALL add_justification(report, "### 1. HYDRAULIC CONTEXT: Extremely Shallow Water (Swash Zone)")
+    
             CALL add_justification(report, "   The structure is located effectively in the **Swash Zone** (h/Hm0 = " // &
                 TRIM(str_buf) // " <= 0.5).")
             CALL add_justification(report, "   Key characteristics:")
-            CALL add_justification(report, "     * **Aeration:** High air entrainment reduces the effective fluid density and buoyancy of the rocks.")
+            CALL add_justification(report, "     * **Aeration:** High air entrainment reduces the effective fluid density &
+                &and buoyancy of the rocks.")
             CALL add_justification(report, "     * **Impact:** Wave impact is characterized by a high-velocity turbulent bore.")
             CALL add_justification(report, "     * **Hydrostatics:** The hydrostatic cushioning effect is negligible.")
             CALL add_justification(report, "")
@@ -1133,12 +1185,14 @@ CONTAINS
             
             CALL add_justification(report, "   **A. Standard Van Gent (2003)**")
             CALL add_justification(report, "      * **Disadvantages:** Using the standard coefficient (1.75) here is **Unsafe**.")
-            CALL add_justification(report, "        Scaravaglione et al. (2025) showed that stability is significantly lower than predicted by intermediate-depth formulas")
+            CALL add_justification(report, "        Scaravaglione et al. (2025) showed that stability is significantly lower than &
+                &predicted by intermediate-depth formulas")
             CALL add_justification(report, "        due to the lack of buoyancy and intense turbulence.")
             
             CALL add_justification(report, "   **B. Scaravaglione (Modified VG 2025) [RECOMMENDED]**")
             CALL add_justification(report, "      * **Advantages:** This formula uses a recalibrated coefficient (C_VG = 3.3 instead of 1.75).")
-            CALL add_justification(report, "      * **Physics:** It explicitly accounts for the increased instability in the swash zone, correcting the underestimation")
+            CALL add_justification(report, "      * **Physics:** It explicitly accounts for the increased instability in the swash &
+                &zone, correcting the underestimation")
             CALL add_justification(report, "        of damage by the original VG formula in this specific regime.")
             
             CALL add_justification(report, "")
