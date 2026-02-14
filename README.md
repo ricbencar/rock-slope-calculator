@@ -143,16 +143,15 @@ The slope angle is entered as $\cot\alpha$ (e.g., 1.5, 2.0, 3.0, 4.0). The slope
 The calculator limits inputs to $1.5 \le \cot\alpha \le 6.0$, aligning with the valid range of the underlying experimental datasets.
 
 ### Notional Permeability ($P$)
-The notional permeability factor $P$ is a dimensionless parameter that quantifies the hydraulic conductivity of the structure's core and underlayers. It ranges theoretically from 0.0 (completely impervious) to 1.0, but practical limits for rock structures are 0.1 to 0.6.
 
-| P Value | Structure Description | Hydrodynamic Effect |
-| :--- | :--- | :--- |
-| **0.1** | Impermeable Core | Armor layer rests directly on a clay core, geotextile, or sand body. Wave energy cannot penetrate the structure. All energy must be dissipated by friction on the outer slope or reflected. This results in high run-up and run-down velocities, increasing instability. |
-| **0.4** | Standard Breakwater | Armor layer, filter layer, and semi-permeable core. A balance of dissipation and penetration. Typical of many harbour breakwaters. |
-| **0.5** | Permeable Core | Armor layer on a filter, on a remarkably open core. Significant energy dissipates into the void spaces, relieving pore pressure during wave drawdown and stabilizing the armor. |
-| **0.6** | Homogeneous Structure | The entire breakwater is composed of armor-sized stone. Maximum dissipation. Rarely built due to cost, but offers the highest hydraulic stability. |
+The notional permeability factor $P$ is a dimensionless parameter that quantifies the hydraulic conductivity of the structure's core and underlayers. It ranges theoretically from 0.0 (completely impervious) to 1.0, but practical limits for rock structures are typically between 0.1 and 0.6.
 
-**Insight:** The influence of $P$ is non-linear and regime-dependent. In the **plunging regime**, a permeable core ($P=0.5$) increases stability by dampening the impact shock. In the **surging regime**, permeability is even more critical; as shown in Equation 5, $P$ appears as an exponent to the breaker parameter. For impermeable structures ($P=0.1$), stability is nearly independent of the wave period in the surging regime, whereas for permeable structures, stability increases drastically with longer periods.
+* **P = 0.1 (Impermeable Core):** This value represents a structure where the armor layer rests directly on an impermeable base, such as a clay core, geotextile, or sand body. In this configuration, wave energy cannot penetrate the structure. Consequently, all energy must be either dissipated by friction on the outer slope or reflected. This results in high run-up and run-down velocities, which increases hydraulic instability.
+* **P = 0.4 (Standard Breakwater):** This value is typical of many harbour breakwaters. It describes a standard cross-section consisting of an armor layer, a filter layer, and a semi-permeable core. This configuration achieves a balance between energy dissipation and penetration.
+* **P = 0.5 (Permeable Core):** This value indicates a structure with an armor layer placed on a filter over a remarkably open core. Significant wave energy dissipates into the large void spaces, which helps relieve pore pressure during wave drawdown and stabilizes the armor layer.
+* **P = 0.6 (Homogeneous Structure):** This value represents a breakwater composed entirely of armor-sized stone. While rarely built due to high costs, this homogeneous structure offers maximum energy dissipation and the highest hydraulic stability.
+
+**Insight:** The influence of $P$ is non-linear and strictly regime-dependent. In the **plunging regime**, a permeable core ($P=0.5$) increases stability by dampening the impact shock of the breaking wave. In the **surging regime**, permeability becomes even more critical; as demonstrated in Equation 5, $P$ appears as an exponent to the breaker parameter. For impermeable structures ($P=0.1$), stability is nearly independent of the wave period in the surging regime, whereas for permeable structures, stability increases drastically with longer wave periods.
 
 ### Damage Definition ($S_d$)
 Damage to a rock slope is defined not by catastrophic failure but by the displacement of a certain volume of material. The non-dimensional damage level $S_d$ is defined as:
@@ -204,11 +203,27 @@ A defining capability of this formula is its comprehensive physical modeling of 
 
 Beyond the hydrodynamics, the Van der Meer (2021) formulation introduces a **performance-based design philosophy** that contrasts sharply with the binary "fail/no-fail" approach of the legacy Hudson method. It explicitly incorporates the **number of waves** and a **quantifiable damage level** into the stability equation, generally following a power law where damage accumulates relative to the square root of the storm duration. This allows engineers to design structures for specific performance targets, ranging from "Start of Damage" to "Intermediate Damage" (reshaping), providing a nuanced tool for lifecycle cost analysis. However, the formula retains a critical limitation: it relies on the assumption that the wave heights follow a **Rayleigh distribution**, where the ratio of the exceedance wave height to the significant wave height is approximately **1.4**. In shallow foreshores where depth-induced breaking truncates the wave distribution, this ratio decreases, potentially rendering the standard formula inaccurate if not corrected or substituted by shallow-water specific alternatives like those proposed by Van Gent or Scaravaglione.
 
+**Surf Similarity Parameter ($\xi_{m-1,0}$):**
+The breaker type is determined using the Iribarren number calculated with the spectral energy period:
+
+$$
+\xi_{m-1,0} = \frac{\tan \alpha}{\sqrt{s_{m-1,0}}} \quad \text{where} \quad s_{m-1,0} = \frac{2\pi H_{m0}}{g T_{m-1,0}^2}
+$$
+
+**Critical Surf Similarity Parameter ($\xi_{cr}$):**
+The transition from plunging to surging waves is defined by the critical surf similarity parameter, calculated as:
+
+$$
+\xi_{cr} = \left[ \frac{c_{pl}}{c_{su}} \cdot P^{0.31} \cdot \sqrt{\tan \alpha} \right]^{\frac{1}{P+0.5}}
+$$
+
+Where $c_{pl} = 6.49$ and $c_{su} = 0.97$.
+
 **Plunging Waves ($\xi_{m-1,0} < \xi_{cr}$):**
-$$N_s = 6.49 \cdot P^{0.18} \cdot \left(\frac{S}{\sqrt{N}}\right)^{0.2} \cdot \xi_{m-1,0}^{-0.5}$$
+$$N_s = c_{pl} \cdot P^{0.18} \cdot \left(\frac{S}{\sqrt{N}}\right)^{0.2} \cdot \xi_{m-1,0}^{-0.5}$$
 
 **Surging Waves ($\xi_{m-1,0} \ge \xi_{cr}$):**
-$$N_s = 0.97 \cdot P^{-0.13} \cdot \left(\frac{S}{\sqrt{N}}\right)^{0.2} \cdot \sqrt{\cot \alpha} \cdot \xi_{m-1,0}^{P}$$
+$$N_s = c_{su} \cdot P^{-0.13} \cdot \left(\frac{S}{\sqrt{N}}\right)^{0.2} \cdot \sqrt{\cot \alpha} \cdot \xi_{m-1,0}^{P}$$
 
 **Explanation:**
 * **Purpose:** To provide a scientifically rigorous stability prediction that accounts for the influence of wave period, permeability, and storm duration in deep to intermediate water.
@@ -322,80 +337,105 @@ $$\frac{H_{m0}}{\Delta D_{n50}} = 3.55 \cdot C_p \cdot N^{-1/10} \cdot (\cot \al
 
 ---
 
+Here is the updated Markdown documentation with the expanded tables and formula definitions.
+
+---
+
 ## 7. Armourstone Layers Design
 
-Once the required nominal diameter $D_{n50}$ is calculated using the stability formulas above, the calculator aids in designing the physical armor layer geometry and specification. This process is governed by **EN 13383-1:2013**.
+Once the required nominal diameter  is calculated using the stability formulas above, the calculator aids in designing the physical armor layer geometry and specification. This process is governed by **EN 13383-1:2013**.
 
 ### Standard Rock Gradings (EN 13383)
-The software includes a comprehensive library of standard rock gradings. The calculator automatically scans these lists to find a grading where the calculated required mass ($M_{50}$) falls in or is very close to the allowable range. 
 
-Below are the **grading definitions** used in the calculation logic:
+The software includes a comprehensive library of standard rock gradings. The calculator automatically scans these lists to find a grading that strictly contains the required mass.
+
+**Selection Criteria:**
+The logic selects a standard grading class based on the calculated target mass ($M_{50,target}$) using the following rules:
+
+1. **Strict Containment:** The target mass must fall strictly between the **Nominal Lower Limit (NLL)** and **Nominal Upper Limit (NUL)** of the class ($NLL < M_{50,target} < NUL$).
+2. **Optimization:** If multiple classes satisfy the containment rule, the calculator selects the grading with the **narrowest range** (smallest difference between $NUL$ and $NLL$) to ensure the most specific fit.
+
+**Limit Definitions & Formulas:**
+For the selected grading, the software calculates the full range of mass limits used for quality control based on the standard EN 13383 definitions:
+
+* **Nominal Lower Limit (NLL):** The standard lower mass boundary defined by the category name.
+* **Nominal Upper Limit (NUL):** The standard upper mass boundary defined by the category name.
+* **Representative $M_{50}$:** Calculated as $0.5 \times (NUL + NLL)$.
+* **Extreme Lower Limit (ELL):** Calculated as $0.7 \times NLL$.
+* **Extreme Upper Limit (EUL):** Calculated as $1.5 \times NUL$.
 
 #### 1. Heavy Mass Armourstone (HMA)
+
 These are used for large breakwaters and revetments where individual stone mass is the governing stability parameter.
 
-| Grading Class | Mass Range (ELL - EUL) | Avg. $M_{50}$ (kg) |
-| :--- | :--- | :--- |
-| **HMA 300-1000** | 540 kg - 690 kg | 615 |
-| **HMA 1000-3000** | 1700 kg - 2100 kg | 1900 |
-| **HMA 3000-6000** | 4200 kg - 4800 kg | 4500 |
-| **HMA 6000-10000** | 7500 kg - 8500 kg | 8000 |
-| **HMA 10000-15000** | 12000 kg - 13000 kg | 12500 |
+| Grading Class | NLL (kg) | NUL (kg) | ELL (kg) | EUL (kg) |
+| --- | --- | --- | --- | --- |
+| **HMA 300-1000** | 300 | 1000 | 210 | 1500 |
+| **HMA 1000-3000** | 1000 | 3000 | 700 | 4500 |
+| **HMA 3000-6000** | 3000 | 6000 | 2100 | 9000 |
+| **HMA 6000-10000** | 6000 | 10000 | 4200 | 15000 |
+| **HMA 10000-15000** | 10000 | 15000 | 7000 | 22500 |
 
 #### 2. Light Mass Armourstone (LMA)
+
 These are standard gradings for smaller hydraulic structures or filter layers.
 
-| Grading Class | Mass Range (ELL - EUL) | Avg. $M_{50}$ (kg) |
-| :--- | :--- | :--- |
-| **LMA 5-40** | 10 kg - 20 kg | 15.0 |
-| **LMA 10-60** | 20 kg - 35 kg | 27.5 |
-| **LMA 15-120** | 35 kg - 60 kg | 47.5 |
-| **LMA 40-200** | 80 kg - 120 kg | 100.0 |
-| **LMA 60-300** | 120 kg - 190 kg | 155.0 |
-| **LMA 15-300** | 45 kg - 135 kg | 90.0 |
-
+| Grading Class | NLL (kg) | NUL (kg) | ELL (kg) | EUL (kg) |
+| --- | --- | --- | --- | --- |
+| **LMA 5-40** | 5 | 40 | 3.5 | 60 |
+| **LMA 10-60** | 10 | 60 | 7 | 90 |
+| **LMA 15-120** | 15 | 120 | 10.5 | 180 |
+| **LMA 40-200** | 40 | 200 | 28 | 300 |
+| **LMA 60-300** | 60 | 300 | 42 | 450 |
+| **LMA 15-300** | 15 | 300 | 10.5 | 450 |
 
 #### 3. Coarse Gradings (CP - Coarse Particle)
-These gradings are generally specified by sieve size but have defined mass characteristics.
 
-| Grading Class | Mass Range (Lower-Upper) | Avg. $M_{50}$ (kg) |
-| :--- | :--- | :--- |
-| **CP 45/125** | 0.4 kg - 1.2 kg | 0.8 |
-| **CP 63/180** | 1.2 kg - 3.8 kg | 2.5 |
-| **CP 90/250** | 3.1 kg - 9.3 kg | 6.2 |
-| **CP 45/180** | 0.4 kg - 1.2 kg | 0.8 |
-| **CP 90/180** | 2.1 kg - 2.8 kg | 2.45 |
+These gradings are generally specified by sieve size (mm) but have defined mass characteristics used here as nominal limits for calculation.
+
+| Grading Class | NLL (kg) | NUL (kg) | ELL (kg) | EUL (kg) |
+| --- | --- | --- | --- | --- |
+| **CP 45/125** | 0.4 | 1.2 | 0.28 | 1.8 |
+| **CP 63/180** | 1.2 | 3.8 | 0.84 | 5.7 |
+| **CP 90/250** | 3.1 | 9.3 | 2.17 | 13.95 |
+| **CP 45/180** | 0.4 | 1.2 | 0.28 | 1.8 |
+| **CP 90/180** | 2.1 | 2.8 | 1.47 | 4.2 |
 
 ### Custom Power Law Grading
-For projects requiring non-standard rock sizes (e.g., "NSL" - Non-Standard Light, or "NSH" - Non-Standard Heavy), or when quarry yield dictates a specific cut, the calculator employs a **Power Law** approach to simulate the grading curve.
 
-If a standard EN 13383 grading is not requested by the calculator user, the software generates a theoretical mass distribution based on the calculated $M_{50}$ using typical ratios taken from the standard EN 13383. 
+For projects requiring non-standard rock sizes, or when the target mass falls outside all standard EN 13383 nominal limits (e.g., very large armor >15t or specific quarry yields), the calculator switches to a **Custom Grading** mode.
 
-This allows for the calculation of layer thickness even when a standard commercial grading is not strictly selected.
+In this mode, the software generates theoretical mass limits based on the calculated target M50. It uses a power law distribution to estimate a theoretical  and  that would provide stability equivalent to the target mass, ensuring a constructible layer thickness is still calculated.
 
 ### Layer Geometry & Construction Formulas
+
 The physical geometry of the armor layer is calculated based on the selected rock grading (Standard or Custom).
 
 **1. Nominal Diameter ($D_{n50}$):**
 Derived from the mass and rock density ($\rho_r$):
+
 $$D_{n50} = \left(\frac{M_{50}}{\rho_r}\right)^{1/3}$$
 
 **2. Layer Thickness ($t$):**
 The perpendicular thickness of the armor layer (usually double layer, $n=2$):
+
 $$t = n \cdot k_t \cdot D_{n50}$$
+
 * $n$: Number of layers (Standard = 2).
 * $k_t$: Layer thickness coefficient.
-    * $k_t \approx 1.0$ for angular/blocky rock.
-    * $k_t$ varies slightly with placement method (0.9 to 1.15 in EN 13383 standards depending on shape).
+*  $k_t \approx 1.0$ for angular/blocky rock.
+*  $k_t$ varies slightly with placement method (0.9 to 1.15 in EN 13383 standards depending on shape).
 
 **3. Packing Density ($\phi$):**
 This parameter is critical for construction quality control, defining how many stones are required per square meter of slope.
-$$N_{units}/m^2 = n \cdot k_t \cdot (1 - n_v) \cdot D_{n50}^{-2}$$
-* $n_v$: Volumetric porosity of the armor layer.
-    * Standard placement porosity is typically **30%** ($n_v = 0.30$).
-    * This implies that roughly 70% of the layer volume is solid rock, and 30% is void space for water dissipation.
 
-This detailed breakdown ensures that the theoretical stability mass calculated by the formulas is translated into a practical, constructible engineering specification.
+$$N_{units}/m^2 = n \cdot k_t \cdot (1 - n_v) \cdot D_{n50}^{-2}$$
+
+* $n_v$: Volumetric porosity of the armor layer.
+* Standard placement porosity is typically **30%** ($n_v = 0.30$).
+* This implies that roughly 70% of the layer volume is solid rock, and 30% is void space for water dissipation.
+
+This detailed breakdown ensures that the theoretical stability mass calculated by the formulas is translated into a practical, constructible engineering specification compliant with European standards.
 
 ---
 

@@ -128,9 +128,9 @@ PROGRAM RockSlopeCalculator
 
     TYPE :: GradingDef
         CHARACTER(LEN=64) :: name
-        REAL(dp) :: min_mass ! kg
-        REAL(dp) :: max_mass ! kg
-        REAL(dp) :: M50      ! kg
+        REAL(dp) :: nll_kg   ! Nominal Lower Limit
+        REAL(dp) :: nul_kg   ! Nominal Upper Limit
+        REAL(dp) :: M50      ! Representative M50 = 0.5 * (NLL + NUL)
     END TYPE GradingDef
 
     TYPE :: Inputs
@@ -227,30 +227,32 @@ PROGRAM RockSlopeCalculator
     ! INITIALIZATION
     ! ----------------------------------------------------------------------
     
-    ! Initialize EN 13383 Database (Mass in kg) - Sorted by M50
-    ! Coarse / Light Gradings
+    ! Initialize EN 13383 Database 
+    ! Logic: NLL and NUL taken from Category Name for LMA/HMA.
+    ! M50 calculated as 0.5 * (NLL + NUL).
+    
     standard_gradings(1) = GradingDef("CP 45/125", 0.4_dp, 1.2_dp, 0.8_dp)
-    standard_gradings(2) = GradingDef("CP 45/180", 0.4_dp, 1.2_dp, 0.8_dp) ! M50=0.8 duplicates, logic handles sort
-    standard_gradings(3) = GradingDef("CP 90/180", 2.1_dp, 2.8_dp, 2.45_dp)
-    standard_gradings(4) = GradingDef("CP 63/180", 1.2_dp, 3.8_dp, 2.5_dp)
-    standard_gradings(5) = GradingDef("CP 90/250", 3.1_dp, 9.3_dp, 6.2_dp)
+    standard_gradings(2) = GradingDef("CP 63/180", 1.2_dp, 3.8_dp, 2.5_dp)
+    standard_gradings(3) = GradingDef("CP 90/250", 3.1_dp, 9.3_dp, 6.2_dp)
+    standard_gradings(4) = GradingDef("CP 45/180", 0.4_dp, 1.2_dp, 0.8_dp)
+    standard_gradings(5) = GradingDef("CP 90/180", 2.1_dp, 2.8_dp, 2.45_dp)
     
-    ! Light Mass Armourstone (LMA)
-    standard_gradings(6) = GradingDef("LMA 5-40", 10.0_dp, 20.0_dp, 15.0_dp)
-    standard_gradings(7) = GradingDef("LMA 10-60", 20.0_dp, 35.0_dp, 27.5_dp)
-    standard_gradings(8) = GradingDef("LMA 15-120", 35.0_dp, 60.0_dp, 47.5_dp)
-    standard_gradings(9) = GradingDef("LMA 15-300", 45.0_dp, 135.0_dp, 90.0_dp)
-    standard_gradings(10) = GradingDef("LMA 40-200", 80.0_dp, 120.0_dp, 100.0_dp)
-    standard_gradings(11) = GradingDef("LMA 60-300", 120.0_dp, 190.0_dp, 155.0_dp)
+    ! Light Mass Armour (LMA) - NLL/NUL from name
+    standard_gradings(6) = GradingDef("LMA 5-40", 5.0_dp, 40.0_dp, 22.5_dp)
+    standard_gradings(7) = GradingDef("LMA 10-60", 10.0_dp, 60.0_dp, 35.0_dp)
+    standard_gradings(8) = GradingDef("LMA 15-120", 15.0_dp, 120.0_dp, 67.5_dp)
+    standard_gradings(9) = GradingDef("LMA 40-200", 40.0_dp, 200.0_dp, 120.0_dp)
+    standard_gradings(10) = GradingDef("LMA 60-300", 60.0_dp, 300.0_dp, 180.0_dp)
+    standard_gradings(11) = GradingDef("LMA 15-300", 15.0_dp, 300.0_dp, 157.5_dp)
     
-    ! Heavy Mass Armourstone (HMA)
-    standard_gradings(12) = GradingDef("HMA 300-1000", 540.0_dp, 690.0_dp, 615.0_dp)
-    standard_gradings(13) = GradingDef("HMA 1000-3000", 1700.0_dp, 2100.0_dp, 1900.0_dp)
-    standard_gradings(14) = GradingDef("HMA 3000-6000", 4200.0_dp, 4800.0_dp, 4500.0_dp)
-    standard_gradings(15) = GradingDef("HMA 6000-10000", 7500.0_dp, 8500.0_dp, 8000.0_dp)
-    standard_gradings(16) = GradingDef("HMA 10000-15000", 12000.0_dp, 13000.0_dp, 12500.0_dp)
+    ! Heavy Mass Armour (HMA) - NLL/NUL from name
+    standard_gradings(12) = GradingDef("HMA 300-1000", 300.0_dp, 1000.0_dp, 650.0_dp)
+    standard_gradings(13) = GradingDef("HMA 1000-3000", 1000.0_dp, 3000.0_dp, 2000.0_dp)
+    standard_gradings(14) = GradingDef("HMA 3000-6000", 3000.0_dp, 6000.0_dp, 4500.0_dp)
+    standard_gradings(15) = GradingDef("HMA 6000-10000", 6000.0_dp, 10000.0_dp, 8000.0_dp)
+    standard_gradings(16) = GradingDef("HMA 10000-15000", 10000.0_dp, 15000.0_dp, 12500.0_dp)
 
-    ! Bubble sort standard_gradings by M50 just to be safe (though defined mostly sorted)
+    ! Sort by M50 for selection logic
     CALL sort_gradings(standard_gradings)
 
     ! Default Inputs
@@ -810,46 +812,49 @@ CONTAINS
         IF (in%use_en13383) THEN
             selected_name = ""
             found = .FALSE.
-            IF (is_armor) THEN
-                ! For Armor: Select lightest where M50 >= Target
-                DO i = 1, SIZE(standard_gradings)
-                    IF (standard_gradings(i)%M50 >= target_mass) THEN
-                        selected_name = standard_gradings(i)%name
-                        final_M50 = standard_gradings(i)%M50
-                        final_w_min = standard_gradings(i)%min_mass * g / 1000.0_dp
-                        final_w_max = standard_gradings(i)%max_mass * g / 1000.0_dp
-                        found = .TRUE.
-                        EXIT
-                    END IF
-                END DO
-            ELSE
-                ! For Underlayer: Select closest M50
-                min_diff = HUGE(1.0_dp)
-                DO i = 1, SIZE(standard_gradings)
-                    diff = ABS(standard_gradings(i)%M50 - target_mass)
+            
+            ! Selection Rule: NLL < Target M50 < NUL
+            ! Tie-breaker: Choose class with smaller grading width (NUL - NLL)
+            min_diff = HUGE(1.0_dp) ! Using min_diff variable to track range width
+            
+            DO i = 1, SIZE(standard_gradings)
+                ! Check strict containment
+                IF (target_mass > standard_gradings(i)%nll_kg .AND. &
+                    target_mass < standard_gradings(i)%nul_kg) THEN
+                    
+                    diff = standard_gradings(i)%nul_kg - standard_gradings(i)%nll_kg
+                    
+                    ! Update if this is the first match OR if this range is tighter (smaller width)
                     IF (diff < min_diff) THEN
                         min_diff = diff
                         selected_name = standard_gradings(i)%name
                         final_M50 = standard_gradings(i)%M50
-                        final_w_min = standard_gradings(i)%min_mass * g / 1000.0_dp
-                        final_w_max = standard_gradings(i)%max_mass * g / 1000.0_dp
+                        
+                        ! Store Nominal Limits (kg) temporarily in w_min/w_max slots
+                        ! We will convert to kN for struct storage
+                        final_w_min = standard_gradings(i)%nll_kg * g / 1000.0_dp
+                        final_w_max = standard_gradings(i)%nul_kg * g / 1000.0_dp
                         found = .TRUE.
                     END IF
-                END DO
-            END IF
+                END IF
+            END DO
             
             IF (found) THEN
                 ld%grading_name = selected_name
                 ld%m_mean_kg = final_M50
+                
+                ! Store weights in kN
                 ld%w_min_kn = final_w_min
                 ld%w_max_kn = final_w_max
+                ! Store masses in kg (NLL/NUL)
                 ld%w_min_kg = final_w_min * 1000.0_dp / g
                 ld%w_max_kg = final_w_max * 1000.0_dp / g
+                
                 ld%w_mean_kn = ld%m_mean_kg * g / 1000.0_dp
                 ld%actual_dn = (ld%w_mean_kn / gamma_r)**(1.0_dp/3.0_dp)
                 ld%design_valid = .TRUE.
             ELSE
-                ld%grading_name = "No Standard Fit"
+                ld%grading_name = "No Standard Fit (Target outside NLL-NUL)"
                 ld%design_valid = .FALSE.
             END IF
         END IF
@@ -1070,7 +1075,8 @@ CONTAINS
             CALL add_justification(report, "   The structure is in the transition zone (1.5 < h/Hm0 = " // TRIM(str_buf) // &
                 " <= 3.0).")
             CALL add_justification(report, "   Key characteristics:")
-            CALL add_justification(report, "     * **Spectral Truncation:** The largest waves in the spectrum break on the foreshore.")
+            CALL add_justification(report, "     * **Spectral Truncation:** The largest waves " // &
+                "in the spectrum break on the foreshore.")
             CALL add_justification(report, "     * **Distribution Shift:** The wave height distribution deviates from &
                 &Rayleigh; H2%/Hm0 drops below 1.4.")
             CALL add_justification(report, "     * **Shoaling:** Significant shoaling modifies the wave shape before impact, &
@@ -1111,7 +1117,8 @@ CONTAINS
             CALL add_justification(report, "   **Use [Van der Meer (2021 Rewritten)]**.")
             CALL add_justification(report, "   Recent research (2024) confirms its validity in this depth range (h/Hm0 > 1.5), &
                 &favoring it over simplified methods")
-            CALL add_justification(report, "   due to the uncertainties in predicting H2% required for the Van Gent Modified formula.")
+            CALL add_justification(report, "   due to the uncertainties in predicting H2% " // &
+                "required for the Van Gent Modified formula.")
 
         ELSEIF (report%hydro%rel_depth > 0.5_dp) THEN
             ! ZONE 3: Very Shallow
@@ -1128,7 +1135,8 @@ CONTAINS
                     &Increasing offshore energy does not increase load.")
                 CALL add_justification(report, "     * **Infragravity Dominance:** Scaravaglione et al. (2025) and VdM (2024) &
                     &note that infragravity waves")
-                CALL add_justification(report, "       begin to dominate the spectrum, causing Tm-1,0 to increase massively (up to 4x).")
+                CALL add_justification(report, "       begin to dominate the spectrum, causing " // &
+                    "Tm-1,0 to increase massively (up to 4x).")
                 CALL add_justification(report, "     * **Formula Deviation:** Standard formulas fail here because the stability &
                     &curves flatten out (Horizontal Trend).")
                 CALL add_justification(report, "")
@@ -1164,7 +1172,8 @@ CONTAINS
                 CALL add_justification(report, "")
                 CALL add_justification(report, "### 3. FINAL JUSTIFICATION")
                 CALL add_justification(report, "   **Use [Van Gent Simplified (2003)]**.")
-                CALL add_justification(report, "   It acts as a robust fallback. Caution is advised as damage may be underpredicted &
+                CALL add_justification(report, "   It acts as a robust fallback. Caution is " // &
+                    "advised as damage may be underpredicted &
                     &for impermeable structures.")
             END IF
         ELSE
@@ -1190,7 +1199,8 @@ CONTAINS
             CALL add_justification(report, "        due to the lack of buoyancy and intense turbulence.")
             
             CALL add_justification(report, "   **B. Scaravaglione (Modified VG 2025) [RECOMMENDED]**")
-            CALL add_justification(report, "      * **Advantages:** This formula uses a recalibrated coefficient (C_VG = 3.3 instead of 1.75).")
+            CALL add_justification(report, "      * **Advantages:** This formula uses a " // &
+                "recalibrated coefficient (C_VG = 3.3 instead of 1.75).")
             CALL add_justification(report, "      * **Physics:** It explicitly accounts for the increased instability in the swash &
                 &zone, correcting the underestimation")
             CALL add_justification(report, "        of damage by the original VG formula in this specific regime.")
@@ -1198,7 +1208,8 @@ CONTAINS
             CALL add_justification(report, "")
             CALL add_justification(report, "### 3. FINAL JUSTIFICATION")
             CALL add_justification(report, "   **Use [Scaravaglione (Modified VG 2025)]**.")
-            CALL add_justification(report, "   It provides the necessary safety margin for swash zone instability where standard formulas fail.")
+            CALL add_justification(report, "   It provides the necessary safety margin for " // &
+                "swash zone instability where standard formulas fail.")
         END IF
 
         ! Interactive Manual Selection Logic
@@ -1254,6 +1265,7 @@ CONTAINS
         CHARACTER(LEN=120) :: separator_long
         TYPE(FormulaResult) :: res
         REAL(dp) :: mass
+        REAL(dp) :: nll_val, nul_val, ell_val, eul_val, rep_m50
         
         separator = "-----------------------------------------------------------------------------------------------"
         separator_long = "--------------------------------------------------------------------------------" // &
@@ -1348,11 +1360,31 @@ CONTAINS
              WRITE(u, '(A)') "   [WARNING] No standard EN13383 grading found for this mass."
         ELSE
              WRITE(u, '(A, A)')       "   Adopted rock grading                : ", TRIM(report%armor_layer%grading_name)
-             WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Min (Lower Limit)           : ", report%armor_layer%w_min_kn, &
-                " kN (", report%armor_layer%w_min_kg, " kg)"
-             WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Max (Upper Limit)           : ", report%armor_layer%w_max_kn, &
-                " kN (", report%armor_layer%w_max_kg, " kg)"
-             WRITE(u, '(A, F0.0, A)') "   Representative M50                  : ", report%armor_layer%m_mean_kg, " kg"
+             
+             IF (report%inputs%use_en13383) THEN
+                 ! === EN 13383 SPECIFIC FORMAT ===
+                 nll_val = report%armor_layer%w_min_kg
+                 nul_val = report%armor_layer%w_max_kg
+                 
+                 ell_val = 0.7_dp * nll_val
+                 eul_val = 1.5_dp * nul_val
+                 rep_m50 = 0.5_dp * (nll_val + nul_val)
+
+                 WRITE(u, '(A, F0.1, A)') "   Representative M50                  : ", rep_m50, " kg"
+                 WRITE(u, '(A, F0.1, A)') "   Nominal lower limit (NLL)           : ", nll_val, " kg"
+                 WRITE(u, '(A, F0.1, A)') "   Nominal upper limit (NUL)           : ", nul_val, " kg"
+                 WRITE(u, '(A, F0.1, A)') "   Extreme lower limit (ELL)           : ", ell_val, " kg"
+                 WRITE(u, '(A, F0.1, A)') "   Extreme upper limit (EUL)           : ", eul_val, " kg"
+             ELSE
+                 ! === CUSTOM GRADING FORMAT ===
+                 WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Min (Lower Limit)           : ", report%armor_layer%w_min_kn, &
+                    " kN (", report%armor_layer%w_min_kg, " kg)"
+                 WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Max (Upper Limit)           : ", report%armor_layer%w_max_kn, &
+                    " kN (", report%armor_layer%w_max_kg, " kg)"
+                 WRITE(u, '(A, F0.1, A)') "   Representative M50                  : ", report%armor_layer%m_mean_kg, " kg"
+             END IF
+
+             ! Common Geometry
              WRITE(u, '(A, F0.3, A)') "   Nominal Diameter (Dn_rock)          : ", report%armor_layer%actual_dn, " m"
              WRITE(u, '(A, F0.2, A)') "   Double Layer Thickness              : ", report%armor_layer%thickness, " m"
              WRITE(u, '(A, F0.2)')    "   Packing Density [rocks/100m2]       : ", report%armor_layer%packing_density
@@ -1368,11 +1400,31 @@ CONTAINS
              WRITE(u, '(A)') "   [WARNING] No suitable standard underlayer grading found."
         ELSE
              WRITE(u, '(A, A)')       "   Adopted rock grading                : ", TRIM(report%underlayer%grading_name)
-             WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Min (Lower Limit)           : ", report%underlayer%w_min_kn, &
-                " kN (", report%underlayer%w_min_kg, " kg)"
-             WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Max (Upper Limit)           : ", report%underlayer%w_max_kn, &
-                " kN (", report%underlayer%w_max_kg, " kg)"
-             WRITE(u, '(A, F0.1, A)') "   Representative M50                  : ", report%underlayer%m_mean_kg, " kg"
+             
+             IF (report%inputs%use_en13383) THEN
+                 ! === EN 13383 SPECIFIC FORMAT ===
+                 nll_val = report%underlayer%w_min_kg
+                 nul_val = report%underlayer%w_max_kg
+                 
+                 ell_val = 0.7_dp * nll_val
+                 eul_val = 1.5_dp * nul_val
+                 rep_m50 = 0.5_dp * (nll_val + nul_val)
+
+                 WRITE(u, '(A, F0.1, A)') "   Representative M50                  : ", rep_m50, " kg"
+                 WRITE(u, '(A, F0.1, A)') "   Nominal lower limit (NLL)           : ", nll_val, " kg"
+                 WRITE(u, '(A, F0.1, A)') "   Nominal upper limit (NUL)           : ", nul_val, " kg"
+                 WRITE(u, '(A, F0.1, A)') "   Extreme lower limit (ELL)           : ", ell_val, " kg"
+                 WRITE(u, '(A, F0.1, A)') "   Extreme upper limit (EUL)           : ", eul_val, " kg"
+             ELSE
+                 ! === CUSTOM GRADING FORMAT ===
+                 WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Min (Lower Limit)           : ", report%underlayer%w_min_kn, &
+                    " kN (", report%underlayer%w_min_kg, " kg)"
+                 WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Max (Upper Limit)           : ", report%underlayer%w_max_kn, &
+                    " kN (", report%underlayer%w_max_kg, " kg)"
+                 WRITE(u, '(A, F0.1, A)') "   Representative M50                  : ", report%underlayer%m_mean_kg, " kg"
+             END IF
+
+             ! Common Geometry
              WRITE(u, '(A, F0.3, A)') "   Nominal Diameter (Dn_rock)          : ", report%underlayer%actual_dn, " m"
              WRITE(u, '(A, F0.2, A)') "   Double Layer Thickness              : ", report%underlayer%thickness, " m"
              WRITE(u, '(A, F0.2)')    "   Packing Density [rocks/100m2]       : ", report%underlayer%packing_density

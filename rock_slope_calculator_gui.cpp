@@ -88,9 +88,9 @@
 
 struct GradingDef {
     std::string name;
-    double min_mass; // kg
-    double max_mass; // kg
-    double M50;      // kg
+    double NLL;      // Nominal Lower Limit (kg)
+    double NUL;      // Nominal Upper Limit (kg)
+    double M50;      // Representative M50 = 0.5 * (NLL + NUL)
 };
 
 struct Inputs {
@@ -143,24 +143,34 @@ struct FormulaResult {
 };
 
 struct LayerDesign {
-    std::string layer_name; // "Primary Armor" or "Underlayer"
+    std::string layer_name; 
     std::string grading_name;
+    
     double target_W_kN;
     double target_M50_kg;
     double target_Dn_m;
     
+    // New EN13383 Fields
+    double nll_kg;
+    double nul_kg;
+    double ell_kg;
+    double eul_kg;
+    
+    // Standard Fields
+    double m_mean_kg; // This will now be 0.5 * (NLL + NUL)
+    double w_mean_kn;
+    
+    // For Custom Grading (Fallbacks)
     double w_min_kn;
     double w_max_kn;
     double w_min_kg;
     double w_max_kg;
     
-    double m_mean_kg;
-    double w_mean_kn;
     double actual_dn;
     double thickness;
-    double packing_density; // rocks/100m2
+    double packing_density;
     
-    bool design_valid; // If a valid grading/design was found
+    bool design_valid; 
 };
 
 struct FullReport {
@@ -208,26 +218,34 @@ public:
             0       // formula_override_index (0 = Auto)
         };
 
-        // Initialize EN 13383 Database (Mass in kg)
+// Initialize EN 13383 Database 
+        // Logic: NLL and NUL taken from Category Name for LMA/HMA.
+        // M50 calculated as 0.5 * (NLL + NUL).
         standard_gradings = {
-            {"CP 45/125",       0.4,   1.2,    0.8},
-            {"CP 63/180",       1.2,   3.8,    2.5},
-            {"CP 90/250",       3.1,   9.3,    6.2},
-            {"CP 45/180",       0.4,   1.2,    0.8},
-            {"CP 90/180",       2.1,   2.8,    2.45},
-            {"LMA 5-40",        10,    20,     15},
-            {"LMA 10-60",       20,    35,     27.5},
-            {"LMA 15-120",      35,    60,     47.5},
-            {"LMA 40-200",      80,    120,    100},
-            {"LMA 60-300",      120,   190,    155},
-            {"LMA 15-300",      45,    135,    90},
-            {"HMA 300-1000",    540,   690,    615},
-            {"HMA 1000-3000",   1700,  2100,   1900},
-            {"HMA 3000-6000",   4200,  4800,   4500},
-            {"HMA 6000-10000",  7500,  8500,   8000},
-            {"HMA 10000-15000", 12000, 13000,  12500}
+            // Name            NLL (kg)   NUL (kg)   M50 (Calc)
+            {"CP 45/125",      0.4,       1.2,       0.8},
+            {"CP 63/180",      1.2,       3.8,       2.5},
+            {"CP 90/250",      3.1,       9.3,       6.2},
+            {"CP 45/180",      0.4,       1.2,       0.8},
+            {"CP 90/180",      2.1,       2.8,       2.45},
+            
+            // Light Mass Armour (LMA) - NLL/NUL from name
+            {"LMA 5-40",       5.0,       40.0,      22.5},
+            {"LMA 10-60",      10.0,      60.0,      35.0},
+            {"LMA 15-120",     15.0,      120.0,     67.5},
+            {"LMA 40-200",     40.0,      200.0,     120.0},
+            {"LMA 60-300",     60.0,      300.0,     180.0},
+            {"LMA 15-300",     15.0,      300.0,     157.5},
+            
+            // Heavy Mass Armour (HMA) - NLL/NUL from name
+            {"HMA 300-1000",   300.0,     1000.0,    650.0},
+            {"HMA 1000-3000",  1000.0,    3000.0,    2000.0},
+            {"HMA 3000-6000",  3000.0,    6000.0,    4500.0},
+            {"HMA 6000-10000", 6000.0,    10000.0,   8000.0},
+            {"HMA 10000-15000",10000.0,   15000.0,   12500.0}
         };
 
+        // Sort by M50 for selection logic
         std::sort(standard_gradings.begin(), standard_gradings.end(), 
             [](const GradingDef& a, const GradingDef& b) {
                 return a.M50 < b.M50;
@@ -691,39 +709,49 @@ public:
         
         // --- EN 13383 Standard Grading Logic ---
         if (grading_EN13383) {
-            // Find standard grading
-            GradingDef selected = {"", 0,0,0};
-            bool found = false;
-            
-            if (is_armor) {
-                // For Armor: Select lightest where M50 >= Target
-                for (const auto& g : standard_gradings) {
-                    if (g.M50 >= target_mass) { selected = g; found = true; break; }
-                }
-            } else {
-                // For Underlayer: Select closest M50
-                double min_diff = std::numeric_limits<double>::infinity();
-                for (const auto& g : standard_gradings) {
-                    double diff = std::abs(g.M50 - target_mass);
-                    if (diff < min_diff) { min_diff = diff; selected = g; found = true; }
+        // Selection Rule: NLL < Target M50 < NUL
+        // Tie-breaker: Choose class with smaller (NUL - NLL)
+        
+        GradingDef selected = {"", 0, 0, 0};
+        bool found = false;
+        double min_range_width = std::numeric_limits<double>::max();
+        
+        for (const auto& g : standard_gradings) {
+            // Check containment: Target must be strictly inside nominal limits
+            if (target_mass > g.NLL && target_mass < g.NUL) {
+                
+                double current_range = g.NUL - g.NLL;
+                
+                // Update if this is the first match OR if this range is tighter (smaller)
+                if (current_range < min_range_width) {
+                    min_range_width = current_range;
+                    selected = g;
+                    found = true;
                 }
             }
+        }
 
-            if (found) {
-                ld.grading_name = selected.name;
-                ld.m_mean_kg = selected.M50;
-                ld.w_min_kn = selected.min_mass * G / 1000.0;
-                ld.w_max_kn = selected.max_mass * G / 1000.0;
-                ld.w_min_kg = selected.min_mass;
-                ld.w_max_kg = selected.max_mass;
-                ld.w_mean_kn = ld.m_mean_kg * G / 1000.0;
-                ld.actual_dn = std::pow(ld.w_mean_kn / gamma_r, 1.0/3.0);
-                ld.design_valid = true;
-            } else {
-                ld.grading_name = "No Standard Fit";
-                ld.design_valid = false;
-            }
-        } 
+        if (found) {
+            ld.grading_name = selected.name;
+            ld.m_mean_kg = selected.M50;
+            
+            // Store Nominal Limits for report
+            ld.w_min_kg = selected.NLL; 
+            ld.w_max_kg = selected.NUL;
+            
+            // Recalculate weights in kN for internal consistency
+            ld.w_min_kn = selected.NLL * G / 1000.0;
+            ld.w_max_kn = selected.NUL * G / 1000.0;
+            ld.w_mean_kn = ld.m_mean_kg * G / 1000.0;
+            
+            ld.actual_dn = std::pow(ld.w_mean_kn / gamma_r, 1.0/3.0);
+            ld.design_valid = true;
+        } else {
+            ld.grading_name = "No Standard Fit (Target outside NLL-NUL)";
+            ld.design_valid = false;
+            // Note: design_valid = false triggers the custom grading fallback below
+        }
+    }
         
         // --- Custom Power Law Calculation ---
         if (!grading_EN13383 || !ld.design_valid) {
@@ -924,24 +952,27 @@ public:
     }
 
     void finalize_design(FullReport& report) {
+        // 1. Design Primary Armor Layer
         double target_dn = report.recommended.Dn50;
         double target_mass = defaults.rho_r * std::pow(target_dn, 3);
         
         report.armor_layer = design_layer(target_mass, target_dn, true);
         
-        // --- Report Armor Layer ---
+        // --- Report Armor Layer Header ---
         log("\n" + std::string(95, '='));
         if (defaults.use_en13383) log("   4. ROCK ARMOUR LAYER DESIGN (EN 13383 Standard)");
         else log("   4. ROCK ARMOUR LAYER DESIGN (Custom Grading)");
         log(std::string(95, '='));
         log("PRIMARY ARMOR LAYER");
         
+        // Helper for formatting lines
         auto fmt_line = [](std::string lab, std::string val) {
             std::stringstream ss;
             ss << "   " << std::left << std::setw(36) << lab << ": " << val;
             return ss.str();
         };
 
+        // Print Theoretical Requirements (Always visible)
         std::stringstream ss_tw, ss_tm, ss_td;
         ss_tw << std::fixed << std::setprecision(2) << report.armor_layer.target_W_kN << " kN";
         log("   Theoretical Required W    : " + ss_tw.str());
@@ -954,28 +985,61 @@ public:
         
         log(std::string(40, '-'));
 
+        // --- Armor Layer Details ---
         if (!report.armor_layer.design_valid && defaults.use_en13383) {
              log("   [WARNING] No standard EN13383 grading found for this mass.");
-             // Don't return, allow printing empty/0 values as per python logic if desired, 
-             // but python returns early. Let's return to match python.
-             return; 
+             // We do not return here to ensure Underlayer is still calculated/attempted
         } else {
              log(fmt_line("Adopted rock grading", report.armor_layer.grading_name));
 
-             std::stringstream ss_min; 
-             ss_min << std::fixed << std::setprecision(2) << report.armor_layer.w_min_kn << " kN (" 
-                    << std::fixed << std::setprecision(0) << report.armor_layer.w_min_kg << " kg)";
-             log(fmt_line("Grading Min (Lower Limit)", ss_min.str()));
+             if (defaults.use_en13383) {
+                 // === EN 13383 SPECIFIC FORMAT ===
+                 double NLL = report.armor_layer.w_min_kg; // Stored in w_min slot
+                 double NUL = report.armor_layer.w_max_kg; // Stored in w_max slot
+                 
+                 double ELL = 0.7 * NLL;
+                 double EUL = 1.5 * NUL;
+                 double rep_M50 = 0.5 * (NLL + NUL);
 
-             std::stringstream ss_max; 
-             ss_max << std::fixed << std::setprecision(2) << report.armor_layer.w_max_kn << " kN (" 
-                    << std::fixed << std::setprecision(0) << report.armor_layer.w_max_kg << " kg)";
-             log(fmt_line("Grading Max (Upper Limit)", ss_max.str()));
+                 // Representative M50
+                 std::stringstream ss_rep;
+                 ss_rep << std::fixed << std::setprecision(1) << rep_M50 << " kg";
+                 log(fmt_line("Representative M50", ss_rep.str()));
 
-             std::stringstream ss_rep;
-             ss_rep << std::fixed << std::setprecision(0) << report.armor_layer.m_mean_kg << " kg";
-             log(fmt_line("Representative M50", ss_rep.str()));
+                 // Nominal Limits
+                 std::stringstream ss_nll, ss_nul; 
+                 ss_nll << std::fixed << std::setprecision(1) << NLL << " kg";
+                 log(fmt_line("Nominal lower limit (NLL)", ss_nll.str()));
 
+                 ss_nul << std::fixed << std::setprecision(1) << NUL << " kg";
+                 log(fmt_line("Nominal upper limit (NUL)", ss_nul.str()));
+
+                 // Extreme Limits
+                 std::stringstream ss_ell, ss_eul; 
+                 ss_ell << std::fixed << std::setprecision(1) << ELL << " kg";
+                 log(fmt_line("Extreme lower limit (ELL)", ss_ell.str()));
+
+                 ss_eul << std::fixed << std::setprecision(1) << EUL << " kg";
+                 log(fmt_line("Extreme upper limit (EUL)", ss_eul.str()));
+
+             } else {
+                 // === CUSTOM GRADING FORMAT (Original) ===
+                 std::stringstream ss_min; 
+                 ss_min << std::fixed << std::setprecision(2) << report.armor_layer.w_min_kn << " kN (" 
+                        << std::fixed << std::setprecision(0) << report.armor_layer.w_min_kg << " kg)";
+                 log(fmt_line("Grading Min (Lower Limit)", ss_min.str()));
+
+                 std::stringstream ss_max; 
+                 ss_max << std::fixed << std::setprecision(2) << report.armor_layer.w_max_kn << " kN (" 
+                        << std::fixed << std::setprecision(0) << report.armor_layer.w_max_kg << " kg)";
+                 log(fmt_line("Grading Max (Upper Limit)", ss_max.str()));
+
+                 std::stringstream ss_rep;
+                 ss_rep << std::fixed << std::setprecision(0) << report.armor_layer.m_mean_kg << " kg";
+                 log(fmt_line("Representative M50", ss_rep.str()));
+             }
+
+             // Common Geometry Outputs
              std::stringstream ss_dn;
              ss_dn << std::fixed << std::setprecision(3) << report.armor_layer.actual_dn << " m";
              log(fmt_line("Nominal Diameter (Dn_rock)", ss_dn.str()));
@@ -990,8 +1054,13 @@ public:
         }
         log(std::string(95, '-'));
 
-        // --- Underlayer ---
-        double target_mass_ul = report.armor_layer.m_mean_kg / 10.0;
+        // 2. Design Underlayer
+        // Rule: M50_underlayer = M50_armor / 10
+        double ref_mass_armor = (defaults.use_en13383) 
+            ? 0.5 * (report.armor_layer.w_min_kg + report.armor_layer.w_max_kg) // Recalculate Rep M50
+            : report.armor_layer.m_mean_kg;
+            
+        double target_mass_ul = ref_mass_armor / 10.0;
         double target_dn_ul = std::pow(target_mass_ul / defaults.rho_r, 1.0/3.0);
         report.underlayer = design_layer(target_mass_ul, target_dn_ul, false);
 
@@ -1004,25 +1073,57 @@ public:
         log("   Target Mass (M50 / 10)    : " + ss_targ_ul_m.str());
         log(std::string(40, '-'));
 
+        // --- Underlayer Details ---
         if (!report.underlayer.design_valid && defaults.use_en13383) {
              log("   [WARNING] No suitable standard underlayer grading found.");
         } else {
              log(fmt_line("Adopted rock grading", report.underlayer.grading_name));
 
-             std::stringstream ss_min; 
-             ss_min << std::fixed << std::setprecision(2) << report.underlayer.w_min_kn << " kN (" 
-                    << std::fixed << std::setprecision(0) << report.underlayer.w_min_kg << " kg)";
-             log(fmt_line("Grading Min (Lower Limit)", ss_min.str()));
+             if (defaults.use_en13383) {
+                 // === EN 13383 SPECIFIC FORMAT ===
+                 double NLL = report.underlayer.w_min_kg;
+                 double NUL = report.underlayer.w_max_kg;
+                 
+                 double ELL = 0.7 * NLL;
+                 double EUL = 1.5 * NUL;
+                 double rep_M50 = 0.5 * (NLL + NUL);
 
-             std::stringstream ss_max; 
-             ss_max << std::fixed << std::setprecision(2) << report.underlayer.w_max_kn << " kN (" 
-                    << std::fixed << std::setprecision(0) << report.underlayer.w_max_kg << " kg)";
-             log(fmt_line("Grading Max (Upper Limit)", ss_max.str()));
+                 std::stringstream ss_rep;
+                 ss_rep << std::fixed << std::setprecision(1) << rep_M50 << " kg";
+                 log(fmt_line("Representative M50", ss_rep.str()));
 
-             std::stringstream ss_rep;
-             ss_rep << std::fixed << std::setprecision(1) << report.underlayer.m_mean_kg << " kg";
-             log(fmt_line("Representative M50", ss_rep.str()));
+                 std::stringstream ss_nll, ss_nul; 
+                 ss_nll << std::fixed << std::setprecision(1) << NLL << " kg";
+                 log(fmt_line("Nominal lower limit (NLL)", ss_nll.str()));
 
+                 ss_nul << std::fixed << std::setprecision(1) << NUL << " kg";
+                 log(fmt_line("Nominal upper limit (NUL)", ss_nul.str()));
+
+                 std::stringstream ss_ell, ss_eul; 
+                 ss_ell << std::fixed << std::setprecision(1) << ELL << " kg";
+                 log(fmt_line("Extreme lower limit (ELL)", ss_ell.str()));
+
+                 ss_eul << std::fixed << std::setprecision(1) << EUL << " kg";
+                 log(fmt_line("Extreme upper limit (EUL)", ss_eul.str()));
+
+             } else {
+                 // === CUSTOM GRADING FORMAT (Original) ===
+                 std::stringstream ss_min; 
+                 ss_min << std::fixed << std::setprecision(2) << report.underlayer.w_min_kn << " kN (" 
+                        << std::fixed << std::setprecision(0) << report.underlayer.w_min_kg << " kg)";
+                 log(fmt_line("Grading Min (Lower Limit)", ss_min.str()));
+
+                 std::stringstream ss_max; 
+                 ss_max << std::fixed << std::setprecision(2) << report.underlayer.w_max_kn << " kN (" 
+                        << std::fixed << std::setprecision(0) << report.underlayer.w_max_kg << " kg)";
+                 log(fmt_line("Grading Max (Upper Limit)", ss_max.str()));
+
+                 std::stringstream ss_rep;
+                 ss_rep << std::fixed << std::setprecision(1) << report.underlayer.m_mean_kg << " kg";
+                 log(fmt_line("Representative M50", ss_rep.str()));
+             }
+
+             // Common Geometry Outputs
              std::stringstream ss_dn;
              ss_dn << std::fixed << std::setprecision(3) << report.underlayer.actual_dn << " m";
              log(fmt_line("Nominal Diameter (Dn_rock)", ss_dn.str()));
