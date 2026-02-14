@@ -143,26 +143,26 @@ class RockStandards:
     """
     GRADINGS = [
         # --- Coarse Gradings (CP) ---
-        {"name": "CP 45/125",       "min": 0.4,   "max": 1.2,    "M50": 0.8},
-        {"name": "CP 63/180",       "min": 1.2,   "max": 3.8,    "M50": 2.5},
-        {"name": "CP 90/250",       "min": 3.1,   "max": 9.3,    "M50": 6.2},
-        {"name": "CP 45/180",       "min": 0.4,   "max": 1.2,    "M50": 0.8}, 
-        {"name": "CP 90/180",       "min": 2.1,   "max": 2.8,    "M50": 2.45},
+        {"name": "CP 45/125",       "NLL_kg": 0.4,   "NUL_kg": 1.2,    "M50": 0.5 * (0.4 + 1.2)},
+        {"name": "CP 63/180",       "NLL_kg": 1.2,   "NUL_kg": 3.8,    "M50": 0.5 * (1.2 + 3.8)},
+        {"name": "CP 90/250",       "NLL_kg": 3.1,   "NUL_kg": 9.3,    "M50": 0.5 * (3.1 + 9.3)},
+        {"name": "CP 45/180",       "NLL_kg": 0.4,   "NUL_kg": 1.2,    "M50": 0.5 * (0.4 + 1.2)}, 
+        {"name": "CP 90/180",       "NLL_kg": 2.1,   "NUL_kg": 2.8,    "M50": 0.5 * (2.1 + 2.8)},
 
         # --- Light Mass Armourstone (LMA) ---
-        {"name": "LMA 5-40",        "min": 10,    "max": 20,     "M50": 15},
-        {"name": "LMA 10-60",       "min": 20,    "max": 35,     "M50": 27.5},
-        {"name": "LMA 15-120",      "min": 35,    "max": 60,     "M50": 47.5},
-        {"name": "LMA 40-200",      "min": 80,    "max": 120,    "M50": 100},
-        {"name": "LMA 60-300",      "min": 120,   "max": 190,    "M50": 155},
-        {"name": "LMA 15-300",      "min": 45,    "max": 135,    "M50": 90},
+        {"name": "LMA 5-40",        "NLL_kg": 5,     "NUL_kg": 40,     "M50": 0.5 * (5 + 40)},
+        {"name": "LMA 10-60",       "NLL_kg": 10,    "NUL_kg": 60,     "M50": 0.5 * (10 + 60)},
+        {"name": "LMA 15-120",      "NLL_kg": 15,    "NUL_kg": 120,    "M50": 0.5 * (15 + 120)},
+        {"name": "LMA 40-200",      "NLL_kg": 40,    "NUL_kg": 200,    "M50": 0.5 * (40 + 200)},
+        {"name": "LMA 60-300",      "NLL_kg": 60,    "NUL_kg": 300,    "M50": 0.5 * (60 + 300)},
+        {"name": "LMA 15-300",      "NLL_kg": 15,    "NUL_kg": 300,    "M50": 0.5 * (15 + 300)},
 
         # --- Heavy Mass Armourstone (HMA) ---
-        {"name": "HMA 300-1000",    "min": 540,   "max": 690,    "M50": 615},
-        {"name": "HMA 1000-3000",   "min": 1700,  "max": 2100,   "M50": 1900},
-        {"name": "HMA 3000-6000",   "min": 4200,  "max": 4800,   "M50": 4500},
-        {"name": "HMA 6000-10000",  "min": 7500,  "max": 8500,   "M50": 8000},
-        {"name": "HMA 10000-15000", "min": 12000, "max": 13000,  "M50": 12500}
+        {"name": "HMA 300-1000",    "NLL_kg": 300,   "NUL_kg": 1000,   "M50": 0.5 * (300 + 1000)},
+        {"name": "HMA 1000-3000",   "NLL_kg": 1000,  "NUL_kg": 3000,   "M50": 0.5 * (1000 + 3000)},
+        {"name": "HMA 3000-6000",   "NLL_kg": 3000,  "NUL_kg": 6000,   "M50": 0.5 * (3000 + 6000)},
+        {"name": "HMA 6000-10000",  "NLL_kg": 6000,  "NUL_kg": 10000,  "M50": 0.5 * (6000 + 10000)},
+        {"name": "HMA 10000-15000", "NLL_kg": 10000, "NUL_kg": 15000,  "M50": 0.5 * (10000 + 15000)}
     ]
 
     @staticmethod
@@ -923,74 +923,65 @@ class IntelligentDesignEngine:
         
         # --- LOGIC BRANCH: EN13383 vs Custom ---
         if grading_EN13383:
-            # Select appropriate standard grading from database
             grading_armor = RockStandards.get_grading(target_mass)
             if not grading_armor:
                 self.log("   [WARNING] No standard EN13383 grading found for this mass.")
-                # Return empty values if no grading is found to prevent crash
-                w_min_kn = 0; w_max_kn = 0; m_mean_kg = 0; w_mean_kn = 0; actual_dn = 0
                 return
             else:
-                w_min_kn = grading_armor.get('min', 0) * g / 1000.0
-                w_max_kn = grading_armor.get('max', 0) * g / 1000.0
+                nll_kg = grading_armor.get('NLL_kg', 0)
+                nul_kg = grading_armor.get('NUL_kg', 0)
+                ell_kg = 0.7 * nll_kg
+                eul_kg = 1.5 * nul_kg
                 m_mean_kg = grading_armor.get('M50', 0)
                 w_mean_kn = m_mean_kg * g / 1000.0
                 actual_dn = (w_mean_kn / gamma_r)**(1.0/3.0)
                 grading_name = grading_armor['name']
-                
         else:
             # --- CUSTOM POWER LAW CALCULATION ---
-            # Used when standard grading is disabled.
-            # Using 'x' as Theoretical Required M50 (in kg)
-            x_val = target_mass  # Input 'x' is Mass in kg
-            g = CoastalConstants.G
+            x_val = target_mass 
             
-            # --- MINIMUM LIMIT ---
-            # Grading Min Params
             a_min = 1.056832014477894E+00
             b_min = 1.482769823574055E+00
             c_min = -2.476127406338004E-01
-            
-            # Calculate Scaling Factor (Dimensionless Ratio)
             factor_min = a_min / (1 + (x_val / b_min)**c_min)
-            
-            # Calculate Mass first (kg), then Weight (kN)
-            # This ensures the 'requires weights in kgs' rule is applied correctly
             w_min_kg_calc = target_mass * factor_min
             w_min_kn = (w_min_kg_calc * g) / 1000.0
             
-            # --- MAXIMUM LIMIT ---
-            # Grading Max Params
             a_max = 1.713085676568561E+00
             b_max = 2.460481255856126E+05
             c_max = 1.327263214034671E-01
-            
-            # Calculate Scaling Factor (Dimensionless Ratio)
             factor_max = a_max / (1 + (x_val / b_max)**c_max)
-            
-            # Calculate Mass first (kg), then Weight (kN)
             w_max_kg_calc = target_mass * factor_max
             w_max_kn = (w_max_kg_calc * g) / 1000.0
             
-            # --- DESIGN VALUES ---
             w_mean_kn = target_weight_kn
             m_mean_kg = target_mass
             actual_dn = target_dn
             grading_name = "Custom Grading"
+            
+            # Calculate weights in kg for display (Custom only)
+            w_min_kg = (w_min_kn * 1000) / g
+            w_max_kg = (w_max_kn * 1000) / g
 
         # Calculate Layer Geometry
-        layer_thickness = 2 * 1.0 * actual_dn # n*kt*Dn50 (n=2 layers)
-        packing_density_per_m2 = 2 * 1.0 * (1 - 0.30) / (actual_dn**2) # Approx porosity 30%
+        layer_thickness = 2 * 1.0 * actual_dn
+        packing_density_per_m2 = 2 * 1.0 * (1 - 0.30) / (actual_dn**2)
         packing_density_100m2 = packing_density_per_m2 * 100
-        
-        # Calculate weights in kg for display
-        w_min_kg = (w_min_kn * 1000) / g
-        w_max_kg = (w_max_kn * 1000) / g
 
         self.log(f"   Adopted rock grading                : {grading_name}")
-        self.log(f"   Grading Min (Lower Limit)           : {w_min_kn:.2f} kN ({w_min_kg:.0f} kg)")
-        self.log(f"   Grading Max (Upper Limit)           : {w_max_kn:.2f} kN ({w_max_kg:.0f} kg)")
-        self.log(f"   Representative M50                  : {m_mean_kg:.0f} kg")
+        
+        # Display logic branches based on EN13383 vs Custom
+        if grading_EN13383:
+            self.log(f"   Representative M50                  : {m_mean_kg:.0f} kg")
+            self.log(f"   Nominal lower limit (NLL)           : {nll_kg:.0f} kg")
+            self.log(f"   Nominal upper limit (NUL)           : {nul_kg:.0f} kg")
+            self.log(f"   Extreme lower limit (ELL)           : {ell_kg:.0f} kg")
+            self.log(f"   Extreme upper limit (EUL)           : {eul_kg:.0f} kg")
+        else:
+            self.log(f"   Grading Min (Lower Limit)           : {w_min_kn:.2f} kN ({w_min_kg:.0f} kg)")
+            self.log(f"   Grading Max (Upper Limit)           : {w_max_kn:.2f} kN ({w_max_kg:.0f} kg)")
+            self.log(f"   Representative M50                  : {m_mean_kg:.0f} kg")
+
         self.log(f"   Nominal Diameter (Dn_rock)          : {actual_dn:.3f} m")
         self.log(f"   Double Layer Thickness              : {layer_thickness:.2f} m")
         self.log(f"   Packing Density [rocks/100m2]       : {packing_density_100m2:.2f}")
@@ -1009,8 +1000,10 @@ class IntelligentDesignEngine:
         if grading_EN13383:
             grading_ul = RockStandards.get_closest_grading(target_mass_ul)
             if grading_ul:
-                w_min_kn_ul = grading_ul.get('min', 0) * g / 1000.0
-                w_max_kn_ul = grading_ul.get('max', 0) * g / 1000.0
+                nll_kg_ul = grading_ul.get('NLL_kg', 0)
+                nul_kg_ul = grading_ul.get('NUL_kg', 0)
+                ell_kg_ul = 0.7 * nll_kg_ul
+                eul_kg_ul = 1.5 * nul_kg_ul
                 m_mean_kg_ul = grading_ul.get('M50', 0)
                 w_mean_kn_ul = m_mean_kg_ul * g / 1000.0
                 actual_dn_ul = (w_mean_kn_ul / gamma_r)**(1.0/3.0)
@@ -1019,44 +1012,47 @@ class IntelligentDesignEngine:
                  self.log("   [WARNING] No suitable standard underlayer grading found.")
                  return
         else:
-            # Custom Approach for Underlayer (Same Logic as Main Armor)
+            # Custom Approach for Underlayer
             x_val_ul = target_mass_ul
-            
-            # Grading Min Params
             a_min = 1.056832014477894E+00
             b_min = 1.482769823574055E+00
             c_min = -2.476127406338004E-01
-            
             w_min_kn_ul = target_weight_kn_ul * a_min / (1 + (x_val_ul / b_min)**c_min)
             
-            # Grading Max Params
             a_max = 1.713085676568561E+00
             b_max = 2.460481255856126E+05
             c_max = 1.327263214034671E-01
-            
             w_max_kn_ul = target_weight_kn_ul * a_max / (1 + (x_val_ul / b_max)**c_max)
             
             w_mean_kn_ul = target_weight_kn_ul
             m_mean_kg_ul = target_mass_ul
             actual_dn_ul = (w_mean_kn_ul / gamma_r)**(1.0/3.0)
             grading_name_ul = "Custom Grading Underlayer"
+            
+            # Calculate weights in kg for display (Custom only)
+            w_min_kg_ul = (w_min_kn_ul * 1000) / g
+            w_max_kg_ul = (w_max_kn_ul * 1000) / g
 
         layer_thickness_ul = 2 * 1.0 * actual_dn_ul
         packing_density_per_m2_ul = 2 * 1.0 * (1 - 0.30) / (actual_dn_ul**2)
         packing_density_100m2_ul = packing_density_per_m2_ul * 100
         
-        # Calculate weights in kg for display
-        w_min_kg_ul = (w_min_kn_ul * 1000) / g
-        w_max_kg_ul = (w_max_kn_ul * 1000) / g
-        
         self.log(f"   Adopted rock grading                : {grading_name_ul}")
-        self.log(f"   Grading Min (Lower Limit)           : {w_min_kn_ul:.2f} kN ({w_min_kg_ul:.0f} kg)")
-        self.log(f"   Grading Max (Upper Limit)           : {w_max_kn_ul:.2f} kN ({w_max_kg_ul:.0f} kg)")
-        self.log(f"   Representative M50                  : {m_mean_kg_ul:.1f} kg")
+        
+        if grading_EN13383:
+            self.log(f"   Representative M50                  : {m_mean_kg_ul:.1f} kg")
+            self.log(f"   Nominal lower limit (NLL)           : {nll_kg_ul:.1f} kg")
+            self.log(f"   Nominal upper limit (NUL)           : {nul_kg_ul:.1f} kg")
+            self.log(f"   Extreme lower limit (ELL)           : {ell_kg_ul:.1f} kg")
+            self.log(f"   Extreme upper limit (EUL)           : {eul_kg_ul:.1f} kg")
+        else:
+            self.log(f"   Grading Min (Lower Limit)           : {w_min_kn_ul:.2f} kN ({w_min_kg_ul:.0f} kg)")
+            self.log(f"   Grading Max (Upper Limit)           : {w_max_kn_ul:.2f} kN ({w_max_kg_ul:.0f} kg)")
+            self.log(f"   Representative M50                  : {m_mean_kg_ul:.1f} kg")
+
         self.log(f"   Nominal Diameter (Dn_rock)          : {actual_dn_ul:.3f} m")
         self.log(f"   Double Layer Thickness              : {layer_thickness_ul:.2f} m")
         self.log(f"   Packing Density [rocks/100m2]       : {packing_density_100m2_ul:.2f}")
-            
         self.log("="*95 + "\n")
 
 # ==============================================================================
