@@ -46,7 +46,7 @@ The transition to the **Van der Meer formulae** (1988) marked a paradigm shift, 
 However, original derivations relied on the mean wave period ($T_m$) and were constrained largely to deep-water conditions where the Rayleigh distribution of wave heights holds valid.
 
 **Spectral Characterization and Shallow Water Complexity:**
-Contemporary coastal engineering has moved toward spectral characterization, utilizing the spectral energy period ($T_{m-1,0}$) to better account for bimodal seas and shallow water spectral flattening. In shallow water, the wave height distribution deviates from Rayleigh, and the shape of the spectrum changes due to triad wave interactions. This necessitates formulas that include parameters like the wave height ratio ($H_{2\%}/H_s$) or physical permeability coefficients ($C_p$) rather than notional ones.
+Contemporary coastal engineering has moved toward spectral characterization, utilizing the spectral energy period ($T_{m-1,0}$) to better account for bimodal seas and shallow water spectral flattening. In shallow water, the wave height distribution deviates from Rayleigh, and the shape of the spectrum changes due to triad wave interactions. This necessitates formulas that include parameters like the wave height ratio ($H_{2\%}/H_{s}$) or physical permeability coefficients ($C_p$) rather than notional ones.
 
 **The "Permissible Damage" Philosophy:**
 Modern design does not seek "zero movement" but rather "permissible damage" over a service life. This probabilistic approach acknowledges that granular structures are flexible. They can reshape under extreme loads without catastrophic failure, unlike rigid concrete structures. The calculator's use of the damage parameter ($S_d$) allows engineers to design for specific performance levels, from "Start of Damage" to "Intermediate Damage" (reshaping).
@@ -110,7 +110,7 @@ This dimensionless parameter acts as the primary switch in the calculator's algo
 The calculator divides the coastal profile into four distinct zones based on the latest research by *Van der Meer et al. (2024)* and *Scaravaglione et al. (2025)*:
 
 * **Zone 1: Deep / Intermediate Water ($h/H_{m0} > 3.0$)**
-    * **Physics:** Rayleigh wave distribution ($H_{2\%}/H_s \approx 1.4$). No depth-induced breaking.
+    * **Physics:** Rayleigh wave distribution ($H_{2\%}/H_{s} \approx 1.4$). No depth-induced breaking.
     * **Recommended Formula:** **[2] Van der Meer (2021)**.
     * **Rationale:** The rewritten formula using spectral period $T_{m-1,0}$ is the industry standard for non-depth-limited conditions.
 
@@ -180,13 +180,13 @@ Despite its historical ubiquity, the Hudson formula possesses profound limitatio
 To adapt this static legacy method to the calculator's advanced zonated logic, the software does not use a fixed coefficient but instead applies a **Dynamic Selection based on the active hydraulic zone**. The algorithm assesses the relative depth to adjust the coefficient, mimicking the physical destabilization observed in shallower waters. In **Deep Water**, the calculator applies the standard non-breaking $K_D$ of **4.0**. As the relative depth decreases into the **Shallow Water** zone, the coefficient is reduced to **3.5**. In the **Very Shallow Water** zone, it is further lowered to **3.0**, and finally, for the highly turbulent **Swash Zone**, a conservative $K_D$ of **2.0** is automatically applied. This dynamic adjustment ensures that even the legacy baseline reflects the increased hydraulic demand of the surf zone, aligning the 1959 formula with the breaking wave constraints introduced in the 1984 SPM.
 
 **Equation:**
-$$\frac{H_{1/10}}{\Delta D_{n50}} = \frac{1.27 H_s}{\Delta D_{n50}} = (K_D \cot \alpha)^{1/3}$$
+$$\frac{H_{1/10}}{\Delta D_{n50}} = \frac{1.27 H_{s}}{\Delta D_{n50}} = (K_D \cot \alpha)^{1/3}$$
 
 **Explanation:**
 * **Purpose:** Developed by the USACE to provide a simple, robust design tool for rubble mounds using regular waves. It aggregates complex physics into the **$K_D$ coefficient**.
 * **Capabilities:** Excellent for preliminary sizing and comparison. It is mathematically simple and widely understood. It forms the basis of many regulatory guidelines.
 * **Limitations:** It **ignores the wave period ($T$) and storm duration ($N$)**. It treats plunging and surging waves identically, which can lead to unsafe designs for long-period swells (surging) or overly conservative designs for short steep waves.
-* **Historical Note on $K_D$:** In the Shore Protection Manual of 1984 (SPM, 1984), not only was the coefficient 1.27 introduced (shifting design wave from $H_s$ to $H_{1/10}$), but the value of $K_D$ for breaking waves was revised and decreased from **3.5 to 2.0**, while for non-breaking waves it remained **4.0**.
+* **Historical Note on $K_D$:** In the Shore Protection Manual of 1984 (SPM, 1984), not only was the coefficient 1.27 introduced (shifting design wave from $H_{s}$ to $H_{1/10}$), but the value of $K_D$ for breaking waves was revised and decreased from **3.5 to 2.0**, while for non-breaking waves it remained **4.0**.
 * **Recommendation:** In contrast to the SPM (1984), research by Van der Meer suggests it is recommended to use **$K_D=4$** for the design of structures with a permeable core, irrespective of whether the conditions are with breaking waves on the foreshore or not.
 
 **Dynamic $K_D$ Selection:**
@@ -228,7 +228,7 @@ $$N_s = c_{su} \cdot P^{-0.13} \cdot \left(\frac{S}{\sqrt{N}}\right)^{0.2} \cdot
 **Explanation:**
 * **Purpose:** To provide a scientifically rigorous stability prediction that accounts for the influence of wave period, permeability, and storm duration in deep to intermediate water.
 * **Capabilities:** It is the **current state-of-the-art for standard breakwater design**. By using $T_{m-1,0}$, it handles bimodal spectra effectively. It accurately predicts the transition from erosive (plunging) failure to sliding (surging) failure.
-* **Limitations:** It assumes a **Rayleigh wave height distribution ($H_{2\%}/H_s \approx 1.4$)**. In shallow water where waves are depth-limited and the distribution is truncated, this assumption may lead to inaccuracies if not corrected.
+* **Limitations:** It assumes a **Rayleigh wave height distribution ($H_{2\%}/H_{s} \approx 1.4$)**. In shallow water where waves are depth-limited and the distribution is truncated, this assumption may lead to inaccuracies if not corrected.
 
 ### [3] Van Gent Modified (2003)
 The **Van Gent Modified (2003)** formulation represents a targeted recalibration of the original Van der Meer equations, specifically engineered to address the hydrodynamic complexities of **shallow foreshores** where standard deep-water assumptions fail. Originating from the experimental insights of Smith et al. (2002) and rigorously extended by Van Gent et al. (2003), this method utilized a specialized dataset of 207 physical model tests conducted with 1:30 and 1:100 foreshore slopes. The primary scientific motivation was to correct the inaccuracies observed when applying Rayleigh-based stability models to depth-limited wave conditions. In deep water, the ratio of the exceedance wave height to the significant wave height is constant at approximately 1.4; however, as waves propagate onto a shallow foreshore, **depth-induced breaking truncates the wave height distribution**, significantly reducing this ratio. The Van Gent Modified formula explicitly integrates this ratio as a governing parameter with an inverse relationship (exponent -1), thereby dynamically adjusting the calculated stability based on the actual statistical distribution of the wave field at the structure's toe.
@@ -237,12 +237,12 @@ A further critical refinement in this formulation is the strict adherence to the
 
 **Modified Plunging ($\xi_{m-1,0} < \xi_{cr}$):**
 $$
-\frac{H_s}{\Delta D_{n50}} = 8.4 P^{0.18} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H_{2\%}} \right) \xi_{m-1,0}^{-0.5}
+\frac{H_{s}}{\Delta D_{n50}} = 8.4 P^{0.18} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_{s}}{H_{2\%}} \right) \xi_{m-1,0}^{-0.5}
 $$
 
 **Modified Surging ($\xi_{m-1,0} \ge \xi_{cr}$):**
 $$
-\frac{H_s}{\Delta D_{n50}} = 1.3 P^{-0.13} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H_{2\%}} \right) \sqrt{\cot \alpha} \xi_{m-1,0}^{P}
+\frac{H_{s}}{\Delta D_{n50}} = 1.3 P^{-0.13} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_{s}}{H_{2\%}} \right) \sqrt{\cot \alpha} \xi_{m-1,0}^{P}
 $$
 
 *(Notes: The Rock Manual suggests using optimized coefficients closer to $c_{pl(mod)} = 8.4$ and $c_{s(mod)} = 1.3$ when the explicit wave height ratio $H_{2\%}/H_{s}$ is included. Exact formulation may vary slightly between subsequent publications or recalibrations).*
@@ -490,7 +490,7 @@ The calculator code could also be updated to allow selection between **Random (B
 * **$H_{50}$**: Average wave height of the 50 highest waves (Etemad-Shahidi/Vidal notation).
 * **$H_{m0}$**: Spectral significant wave height, defined as $4\sqrt{m_0}$.
 * **$H_{m0,deep}$**: Spectral significant wave height in deep water.
-* **$H_s$**: Significant wave height (general term, often used interchangeably with $H_{1/3}$ or $H_{m0}$ depending on context).
+* **$H_{s}$**: Significant wave height (general term, often used interchangeably with $H_{1/3}$ or $H_{m0}$ depending on context).
 * **$K_D$**: Stability coefficient used in the Hudson formula.
 * **$k_t$**: Layer thickness coefficient.
 * **$LT$**: Length-to-thickness ratio of the armour stone units.
@@ -499,7 +499,7 @@ The calculator code could also be updated to allow selection between **Random (B
 * **$M_{50}$**: Median mass of the armour rock grading (50% value by sample mass).
 * **$N$** or **$N_w$**: Number of waves in the storm duration.
 * **$N_{od}$**: Number of displaced units (damage parameter used by Thompson & Shuttler).
-* **$N_s$**: Stability number, defined as $H_s / (\Delta D_{n50})$.
+* **$N_s$**: Stability number, defined as $H_{s} / (\Delta D_{n50})$.
 * **$n_v$**: Volumetric porosity of the armor layer.
 * **$P$**: Notional permeability factor (Van der Meer).
 * **$\Pi_0$**: Nonlinearity parameter (Goda).
