@@ -53,7 +53,7 @@ Modern design does not seek "zero movement" but rather "permissible damage" over
 
 **The Frontier of Knowledge:**
 Despite these advancements, the physics of extremely shallow water remains a frontier of research where standard assumptions often break down. As explicitly stated by **Van der Meer et al. (2024)**: 
-> *"In summary, for shallow water conditions with $h/H_{m0~deep} < 1.5$, there is currently no reliable method to describe the stability of rock slopes under wave attack."*
+> *"In summary, for shallow water conditions with $h/H_{m0,\mathrm{deep}} < 1.5$, there is currently no reliable method to describe the stability of rock slopes under wave attack."*
 
 This software utilizes the newest 2025 research, specifically the works by Van der Meer et al., Van Gent et al. and Scaravaglione et al., to bridge this specific gap and provide valid predictions where traditional methods fail.
 
