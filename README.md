@@ -302,7 +302,7 @@ $$N_s = 3.9 \cdot C_p \cdot N^{-0.1} \cdot S^{1/6} \cdot \xi_{m-1,0}^{-1/3} \cdo
 
 **Explanation:**
 * **Purpose:** To provide a single, unified formula derived from data mining (M5 model tree) a vast dataset of historical tests, bridging deep and shallow water contexts.
-* **Capabilities:** It replaces the notional permeability $P$ with a measurable physical coefficient $C_p$. Crucially, it includes the parameter $m$ (tangent of the *foreshore* slope, i.e., $m = 1.0 / \text{foreshore\_cot}$), allowing it to account for wave transformation and shoaling effects occurring *before* the wave reaches the structure.
+* **Capabilities:** It replaces the notional permeability $P$ with a measurable physical coefficient $C_p$. Crucially, it includes the parameter $m$ (tangent of the *foreshore* slope, i.e., $m = 1.0 / \mathrm{foreshore\_cot}$), allowing it to account for wave transformation and shoaling effects occurring *before* the wave reaches the structure.
 * **Limitations:** While statistically powerful, it lacks the specific calibration for the highly turbulent bore-flow of the surf zone, leading to **potential overestimation of stability in very shallow water** as shown by Scaravaglione (2025).
 
 ### [7] Scaravaglione Mod. VG (2025)
