@@ -106,7 +106,7 @@
 //      rock_slope_calculator_cli.exe
 //
 //    Command Line Mode:
-//      rock_slope_calculator_cli.exe [Hs] [Tm] [h_toe] [slope] [fore] [rho_r] [P] [D_ratio] [Sd] [Duration] [UseEN13383]
+//      rock_slope_calculator_cli.exe [Hs] [Tm] [h_toe] [slope] [fore] [rho_r] [P] [D_ratio] [Sd] [Duration] [UseEN13383] [CustomFamily]
 //
 //    Example:
 //      rock_slope_calculator_cli.exe 2.5 10.0 6.0 2.0 30.0 2650 0.4 0.3 2.0 6.0 true
@@ -165,6 +165,7 @@ struct Inputs {
     double duration;    // Storm Duration (hours)
     bool use_en13383;   // Use Standard Grading
     bool manual_selection; // Interactive manual selection flag
+    std::string custom_family; // AUTO, HMA, LMA, or CP when using custom grading
 };
 
 struct DerivedParams {
@@ -215,6 +216,12 @@ struct LayerDesign {
     double actual_dn;
     double thickness;
     double packing_density; // rocks/100m2
+
+    // Custom interpolated grading metadata
+    bool used_custom_interpolation;
+    std::string custom_family;
+    double custom_ratio_nul_nll;
+    std::string custom_ratio_note;
     
     bool design_valid; // If a valid grading/design was found
 };
@@ -258,7 +265,8 @@ public:
             2.0,    // Sd
             6.0,    // duration
             true,   // use_en13383
-            0       // formula_override_index (0 = Auto)
+            0,      // formula_override_index (0 = Auto)
+            "AUTO"  // custom_family for custom grading mode
         };
 
         // Initialize EN 13383 Database 
@@ -266,11 +274,12 @@ public:
         // M50 calculated as 0.5 * (NLL + NUL).
         standard_gradings = {
             // Name            NLL (kg)   NUL (kg)   M50 (Calc)
-            {"CP 45/125",      0.4,       1.2,       0.8},
-            {"CP 63/180",      1.2,       3.8,       2.5},
-            {"CP 90/250",      3.1,       9.3,       6.2},
-            {"CP 45/180",      0.4,       1.2,       0.8}, // Kept small range conservative
-            {"CP 90/180",      2.1,       2.8,       2.45},
+            {"CP32/90",        0.868,     19.319,    10.0935},
+            {"CP45/125",       2.415,     51.758,    27.0865},
+            {"CP63/180",       6.626,     154.548,   80.587},
+            {"CP90/250",       19.319,    414.063,   216.691},
+            {"CP45/180",       2.415,     154.548,   78.4815},
+            {"CP90/180",       19.319,    154.548,   86.9335},
             
             // Light Mass Armour (LMA) - NLL/NUL from name
             {"LMA 5-40",       5.0,       40.0,      22.5},
@@ -749,103 +758,197 @@ public:
 
     // --- Layer Design ---
 
+    static bool starts_with(const std::string& value, const std::string& prefix) {
+        return value.rfind(prefix, 0) == 0;
+    }
+
+    std::string grading_family(const std::string& grading_name) const {
+        if (starts_with(grading_name, "HMA ")) return "HMA";
+        if (starts_with(grading_name, "LMA ")) return "LMA";
+        if (starts_with(grading_name, "CP"))   return "CP";
+        return "UNKNOWN";
+    }
+
+    std::vector<GradingDef> get_family_gradings(const std::string& family) const {
+        std::vector<GradingDef> out;
+        for (const auto& g : standard_gradings) {
+            if (grading_family(g.name) == family) out.push_back(g);
+        }
+        std::sort(out.begin(), out.end(), [](const GradingDef& a, const GradingDef& b) {
+            return a.M50 < b.M50;
+        });
+        return out;
+    }
+
+    std::string select_custom_family(double target_mass) const {
+        double safe_mass = std::max(target_mass, 1e-9);
+        double best_score = std::numeric_limits<double>::max();
+        std::string best_family = "LMA";
+
+        for (const auto& g : standard_gradings) {
+            const std::string fam = grading_family(g.name);
+            if (fam == "UNKNOWN") continue;
+
+            double score = std::abs(std::log(safe_mass) - std::log(std::max(g.M50, 1e-9)));
+
+            // Mild engineering preference: favour mass-based armourstone families
+            // over CP when distances are very similar.
+            if (fam == "CP") score += 0.08;
+
+            if (score < best_score) {
+                best_score = score;
+                best_family = fam;
+            }
+        }
+        return best_family;
+    }
+
+    double interpolate_family_ratio(double target_mass, const std::string& family, std::string& note) const {
+        std::vector<GradingDef> family_gradings = get_family_gradings(family);
+        if (family_gradings.empty()) {
+            note = "fallback ratio R=NUL/NLL = 3.0 (no family data)";
+            return 3.0;
+        }
+
+        std::vector<double> x;
+        std::vector<double> y;
+        x.reserve(family_gradings.size());
+        y.reserve(family_gradings.size());
+        for (const auto& g : family_gradings) {
+            x.push_back(std::log(std::max(g.M50, 1e-9)));
+            y.push_back(std::log(std::max(g.NUL / g.NLL, 1.0 + 1e-9)));
+        }
+
+        double xt = std::log(std::max(target_mass, 1e-9));
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(3);
+
+        if (family_gradings.size() == 1) {
+            double ratio = family_gradings.front().NUL / family_gradings.front().NLL;
+            oss << family << " family single-point ratio used";
+            note = oss.str();
+            return ratio;
+        }
+
+        if (xt <= x.front()) {
+            double ratio = std::exp(y.front());
+            oss << family << " family ratio clamped to lower-end class " << family_gradings.front().name;
+            note = oss.str();
+            return ratio;
+        }
+        if (xt >= x.back()) {
+            double ratio = std::exp(y.back());
+            oss << family << " family ratio clamped to upper-end class " << family_gradings.back().name;
+            note = oss.str();
+            return ratio;
+        }
+
+        for (size_t i = 0; i + 1 < family_gradings.size(); ++i) {
+            if (xt >= x[i] && xt <= x[i + 1]) {
+                double t = (xt - x[i]) / (x[i + 1] - x[i]);
+                double log_ratio = y[i] + t * (y[i + 1] - y[i]);
+                double ratio = std::exp(log_ratio);
+                oss << family << " family ratio interpolated between "
+                    << family_gradings[i].name << " and " << family_gradings[i + 1].name;
+                note = oss.str();
+                return ratio;
+            }
+        }
+
+        double ratio = std::exp(y.back());
+        oss << family << " family ratio fallback to upper-end class " << family_gradings.back().name;
+        note = oss.str();
+        return ratio;
+    }
+
     LayerDesign design_layer(double target_mass, double target_dn, bool is_armor) {
-        LayerDesign ld;
+        LayerDesign ld{};
         ld.layer_name = is_armor ? "Primary Armor" : "Underlayer";
         ld.target_M50_kg = target_mass;
         ld.target_Dn_m = target_dn;
         ld.target_W_kN = target_mass * G / 1000.0;
-        
+        ld.used_custom_interpolation = false;
+        ld.custom_family = "";
+        ld.custom_ratio_nul_nll = 0.0;
+        ld.custom_ratio_note = "";
+
         double gamma_r = defaults.rho_r * G / 1000.0;
         bool grading_EN13383 = defaults.use_en13383;
         
         // --- EN 13383 Standard Grading Logic ---
         if (grading_EN13383) {
-        // Selection Rule: NLL < Target M50 < NUL
-        // Tie-breaker: Choose class with smaller (NUL - NLL)
-        
-        GradingDef selected = {"", 0, 0, 0};
-        bool found = false;
-        double min_range_width = std::numeric_limits<double>::max();
-        
-        for (const auto& g : standard_gradings) {
-            // Check containment: Target must be strictly inside nominal limits
-            if (target_mass > g.NLL && target_mass < g.NUL) {
-                
-                double current_range = g.NUL - g.NLL;
-                
-                // Update if this is the first match OR if this range is tighter (smaller)
-                if (current_range < min_range_width) {
-                    min_range_width = current_range;
-                    selected = g;
-                    found = true;
+            // Selection Rule: NLL < Target M50 < NUL
+            // Tie-breaker: Choose class with smaller (NUL - NLL)
+            GradingDef selected = {"", 0, 0, 0};
+            bool found = false;
+            double min_range_width = std::numeric_limits<double>::max();
+            
+            for (const auto& g : standard_gradings) {
+                if (target_mass > g.NLL && target_mass < g.NUL) {
+                    double current_range = g.NUL - g.NLL;
+                    if (current_range < min_range_width) {
+                        min_range_width = current_range;
+                        selected = g;
+                        found = true;
+                    }
                 }
             }
-        }
 
-        if (found) {
-            ld.grading_name = selected.name;
-            ld.m_mean_kg = selected.M50;
-            
-            // Store Nominal Limits for report
-            ld.w_min_kg = selected.NLL; 
-            ld.w_max_kg = selected.NUL;
-            
-            // Recalculate weights in kN for internal consistency
-            ld.w_min_kn = selected.NLL * G / 1000.0;
-            ld.w_max_kn = selected.NUL * G / 1000.0;
-            ld.w_mean_kn = ld.m_mean_kg * G / 1000.0;
-            
-            ld.actual_dn = std::pow(ld.w_mean_kn / gamma_r, 1.0/3.0);
-            ld.design_valid = true;
-        } else {
-            ld.grading_name = "No Standard Fit (Target outside NLL-NUL)";
-            ld.design_valid = false;
-            // Note: design_valid = false triggers the custom grading fallback below
+            if (found) {
+                ld.grading_name = selected.name;
+                ld.m_mean_kg = selected.M50;
+                ld.w_min_kg = selected.NLL;
+                ld.w_max_kg = selected.NUL;
+                ld.w_min_kn = selected.NLL * G / 1000.0;
+                ld.w_max_kn = selected.NUL * G / 1000.0;
+                ld.w_mean_kn = ld.m_mean_kg * G / 1000.0;
+                ld.actual_dn = std::pow(ld.w_mean_kn / gamma_r, 1.0/3.0);
+                ld.design_valid = true;
+            } else {
+                ld.grading_name = "No Standard Fit (Target outside NLL-NUL)";
+                ld.design_valid = false;
+                // Note: design_valid = false triggers the custom interpolation fallback below
+            }
         }
-    }
         
-        // --- Custom Power Law Calculation ---
+        // --- Custom Interpolated Grading ---
         if (!grading_EN13383 || !ld.design_valid) {
-             ld.grading_name = is_armor ? "Custom Grading" : "Custom Grading Underlayer";
-             
-             // Using 'x' as Theoretical Required M50 (in kg)
-             double x_val = ld.target_M50_kg;
-             
-             // --- MINIMUM LIMIT ---
-             // Grading Min Params
-             double a_min = 1.056832014477894E+00;
-             double b_min = 1.482769823574055E+00;
-             double c_min = -2.476127406338004E-01;
-             
-             // Calculate Scaling Factor (Dimensionless Ratio)
-             double factor_min = a_min / (1.0 + std::pow(x_val / b_min, c_min));
-             
-             // Calculate Mass first (kg), then Weight (kN)
-             // This ensures the 'requires weights in kgs' rule is applied correctly
-             double w_min_kg_calc = target_mass * factor_min;
-             ld.w_min_kn = (w_min_kg_calc * G) / 1000.0;
-             
-             // --- MAXIMUM LIMIT ---
-             // Grading Max Params
-             double a_max = 1.713085676568561E+00;
-             double b_max = 2.460481255856126E+05;
-             double c_max = 1.327263214034671E-01;
-             
-             // Calculate Scaling Factor (Dimensionless Ratio)
-             double factor_max = a_max / (1.0 + std::pow(x_val / b_max, c_max));
-             
-             // Calculate Mass first (kg), then Weight (kN)
-             double w_max_kg_calc = target_mass * factor_max;
-             ld.w_max_kn = (w_max_kg_calc * G) / 1000.0;
-             
-             // --- DESIGN VALUES ---
-             ld.w_mean_kn = ld.target_W_kN;
-             ld.m_mean_kg = target_mass;
-             ld.actual_dn = target_dn;
-             ld.w_min_kg = w_min_kg_calc;
-             ld.w_max_kg = w_max_kg_calc;
-             ld.design_valid = true;
+            ld.grading_name = is_armor ? "Custom Interpolated Grading" : "Custom Interpolated Grading Underlayer";
+
+            // Methodology:
+            // 1. Select the closest standard family (HMA/LMA/CP) in M50-space.
+            // 2. Interpolate the nominal bandwidth ratio R = NUL / NLL within that family
+            //    as a function of target M50.
+            // 3. Derive the custom nominal range from the target representative mass M50:
+            //       NLL = 2*M50 / (1 + R)
+            //       NUL = 2*M50*R / (1 + R)
+            //    This keeps the custom grading range compatible with the bandwidth logic
+            //    of the tabulated EN 13383 classes.
+            std::string family = defaults.custom_family;
+            std::transform(family.begin(), family.end(), family.begin(), [](unsigned char c){ return std::toupper(c); });
+            if (family != "HMA" && family != "LMA" && family != "CP") {
+                family = select_custom_family(ld.target_M50_kg);
+            }
+            std::string ratio_note;
+            double ratio_nul_nll = interpolate_family_ratio(ld.target_M50_kg, family, ratio_note);
+            ratio_nul_nll = std::max(ratio_nul_nll, 1.01);
+
+            double nll_kg = (2.0 * target_mass) / (1.0 + ratio_nul_nll);
+            double nul_kg = ratio_nul_nll * nll_kg;
+
+            ld.used_custom_interpolation = true;
+            ld.custom_family = family;
+            ld.custom_ratio_nul_nll = ratio_nul_nll;
+            ld.custom_ratio_note = ratio_note;
+
+            ld.w_min_kg = nll_kg;
+            ld.w_max_kg = nul_kg;
+            ld.w_min_kn = nll_kg * G / 1000.0;
+            ld.w_max_kn = nul_kg * G / 1000.0;
+            ld.w_mean_kn = ld.target_W_kN;
+            ld.m_mean_kg = target_mass;
+            ld.actual_dn = target_dn;
+            ld.design_valid = true;
         }
 
         // Geometry
@@ -1115,20 +1218,38 @@ public:
                  log(fmt_line("Extreme upper limit (EUL)", ss_eul.str()));
 
              } else {
-                 // === CUSTOM GRADING FORMAT (Original) ===
-                 std::stringstream ss_min; 
-                 ss_min << std::fixed << std::setprecision(2) << report.armor_layer.w_min_kn << " kN (" 
-                        << std::fixed << std::setprecision(0) << report.armor_layer.w_min_kg << " kg)";
-                 log(fmt_line("Grading Min (Lower Limit)", ss_min.str()));
+                 // === CUSTOM INTERPOLATED GRADING FORMAT ===
+                 double NLL = report.armor_layer.w_min_kg;
+                 double NUL = report.armor_layer.w_max_kg;
+                 double ELL = 0.7 * NLL;
+                 double EUL = 1.5 * NUL;
 
-                 std::stringstream ss_max; 
-                 ss_max << std::fixed << std::setprecision(2) << report.armor_layer.w_max_kn << " kN (" 
-                        << std::fixed << std::setprecision(0) << report.armor_layer.w_max_kg << " kg)";
-                 log(fmt_line("Grading Max (Upper Limit)", ss_max.str()));
+                 log(fmt_line("Custom family basis", report.armor_layer.custom_family));
+
+                 std::stringstream ss_ratio;
+                 ss_ratio << std::fixed << std::setprecision(3) << report.armor_layer.custom_ratio_nul_nll;
+                 log(fmt_line("Interpolated ratio (NUL/NLL)", ss_ratio.str()));
+                 log(fmt_line("Interpolation rule", report.armor_layer.custom_ratio_note));
 
                  std::stringstream ss_rep;
-                 ss_rep << std::fixed << std::setprecision(0) << report.armor_layer.m_mean_kg << " kg";
+                 ss_rep << std::fixed << std::setprecision(1) << report.armor_layer.m_mean_kg << " kg";
                  log(fmt_line("Representative M50", ss_rep.str()));
+
+                 std::stringstream ss_nll;
+                 ss_nll << std::fixed << std::setprecision(1) << NLL << " kg";
+                 log(fmt_line("Nominal lower limit (NLL)", ss_nll.str()));
+
+                 std::stringstream ss_nul;
+                 ss_nul << std::fixed << std::setprecision(1) << NUL << " kg";
+                 log(fmt_line("Nominal upper limit (NUL)", ss_nul.str()));
+
+                 std::stringstream ss_ell;
+                 ss_ell << std::fixed << std::setprecision(1) << ELL << " kg";
+                 log(fmt_line("Extreme lower limit (ELL)", ss_ell.str()));
+
+                 std::stringstream ss_eul;
+                 ss_eul << std::fixed << std::setprecision(1) << EUL << " kg";
+                 log(fmt_line("Extreme upper limit (EUL)", ss_eul.str()));
              }
 
              // Common Geometry Outputs
@@ -1199,20 +1320,38 @@ public:
                  log(fmt_line("Extreme upper limit (EUL)", ss_eul.str()));
 
              } else {
-                 // === CUSTOM GRADING FORMAT (Original) ===
-                 std::stringstream ss_min; 
-                 ss_min << std::fixed << std::setprecision(2) << report.underlayer.w_min_kn << " kN (" 
-                        << std::fixed << std::setprecision(0) << report.underlayer.w_min_kg << " kg)";
-                 log(fmt_line("Grading Min (Lower Limit)", ss_min.str()));
+                 // === CUSTOM INTERPOLATED GRADING FORMAT ===
+                 double NLL = report.underlayer.w_min_kg;
+                 double NUL = report.underlayer.w_max_kg;
+                 double ELL = 0.7 * NLL;
+                 double EUL = 1.5 * NUL;
 
-                 std::stringstream ss_max; 
-                 ss_max << std::fixed << std::setprecision(2) << report.underlayer.w_max_kn << " kN (" 
-                        << std::fixed << std::setprecision(0) << report.underlayer.w_max_kg << " kg)";
-                 log(fmt_line("Grading Max (Upper Limit)", ss_max.str()));
+                 log(fmt_line("Custom family basis", report.underlayer.custom_family));
+
+                 std::stringstream ss_ratio;
+                 ss_ratio << std::fixed << std::setprecision(3) << report.underlayer.custom_ratio_nul_nll;
+                 log(fmt_line("Interpolated ratio (NUL/NLL)", ss_ratio.str()));
+                 log(fmt_line("Interpolation rule", report.underlayer.custom_ratio_note));
 
                  std::stringstream ss_rep;
                  ss_rep << std::fixed << std::setprecision(1) << report.underlayer.m_mean_kg << " kg";
                  log(fmt_line("Representative M50", ss_rep.str()));
+
+                 std::stringstream ss_nll;
+                 ss_nll << std::fixed << std::setprecision(1) << NLL << " kg";
+                 log(fmt_line("Nominal lower limit (NLL)", ss_nll.str()));
+
+                 std::stringstream ss_nul;
+                 ss_nul << std::fixed << std::setprecision(1) << NUL << " kg";
+                 log(fmt_line("Nominal upper limit (NUL)", ss_nul.str()));
+
+                 std::stringstream ss_ell;
+                 ss_ell << std::fixed << std::setprecision(1) << ELL << " kg";
+                 log(fmt_line("Extreme lower limit (ELL)", ss_ell.str()));
+
+                 std::stringstream ss_eul;
+                 ss_eul << std::fixed << std::setprecision(1) << EUL << " kg";
+                 log(fmt_line("Extreme upper limit (EUL)", ss_eul.str()));
              }
 
              // Common Geometry Outputs
@@ -1303,6 +1442,10 @@ int main(int argc, char* argv[]) {
                  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); });
                  in.use_en13383 = (s=="true"||s=="1");
             }
+            if (argc >= 13) {
+                in.custom_family = argv[12];
+                std::transform(in.custom_family.begin(), in.custom_family.end(), in.custom_family.begin(), [](unsigned char c){ return std::toupper(c); });
+            }
         } catch (const std::exception& e) {
             std::cerr << "Error parsing args: " << e.what() << "\n";
             return 1;
@@ -1325,6 +1468,12 @@ int main(int argc, char* argv[]) {
         in.Sd = get_input_double("Design Damage Level S (2.0=Start)", in.Sd);
         in.duration = get_input_double("Storm Duration [hours]", in.duration);
         in.use_en13383 = get_input_bool("Use EN13383 Standard Grading? (True/False)", in.use_en13383);
+        if (!in.use_en13383) {
+            std::string fam = get_input_str("Custom grading family [AUTO/HMA/LMA/CP]", in.custom_family);
+            std::transform(fam.begin(), fam.end(), fam.begin(), [](unsigned char c){ return std::toupper(c); });
+            if (fam == "HMA" || fam == "LMA" || fam == "CP" || fam == "AUTO") in.custom_family = fam;
+            else in.custom_family = "AUTO";
+        }
         in.manual_selection = get_input_bool("Choose stability formula instead of automatic (True/False)", false);
     }
 

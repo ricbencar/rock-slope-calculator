@@ -123,7 +123,8 @@ DEFAULT_CONFIG = {
 
     # --- Design Criteria ---
     'Sd': 2.0,                  # Design Damage Level S (2.0 = Start of Damage)
-    'grading_EN13383': True,    # Use Standard EN13383 Grading (True) or Custom Power Law (False)
+    'grading_EN13383': True,    # Use Standard EN13383 Grading (True) or Custom Interpolated Grading (False)
+    'custom_family': 'AUTO',    # AUTO, HMA, LMA, or CP for custom interpolated grading
     
     # --- System Settings ---
     'output_file': "output.txt"
@@ -138,16 +139,21 @@ class RockStandards:
     Database of Standard Rock Gradings according to EN 13383-1:2013.
     Values represent Mass in kg.
     Used to automatically select standard grading classes based on calculated mass.
-    
+
+    In custom grading mode, the same grading families are also used as the basis
+    for interpolating the nominal bandwidth ratio R = NUL / NLL as a function of
+    the target representative mass M50.
+
     Reference: CEN (2013). "EN 13383-1:2013 Armourstone - Part 1: Specification."
     """
     GRADINGS = [
         # --- Coarse Gradings (CP) ---
-        {"name": "CP 45/125",       "NLL_kg": 0.4,   "NUL_kg": 1.2,    "M50": 0.5 * (0.4 + 1.2)},
-        {"name": "CP 63/180",       "NLL_kg": 1.2,   "NUL_kg": 3.8,    "M50": 0.5 * (1.2 + 3.8)},
-        {"name": "CP 90/250",       "NLL_kg": 3.1,   "NUL_kg": 9.3,    "M50": 0.5 * (3.1 + 9.3)},
-        {"name": "CP 45/180",       "NLL_kg": 0.4,   "NUL_kg": 1.2,    "M50": 0.5 * (0.4 + 1.2)}, 
-        {"name": "CP 90/180",       "NLL_kg": 2.1,   "NUL_kg": 2.8,    "M50": 0.5 * (2.1 + 2.8)},
+        {"name": "CP32/90",         "NLL_kg": 0.868,  "NUL_kg": 19.319,   "M50": 0.5 * (0.868 + 19.319)},
+        {"name": "CP45/125",        "NLL_kg": 2.415,  "NUL_kg": 51.758,   "M50": 0.5 * (2.415 + 51.758)},
+        {"name": "CP63/180",        "NLL_kg": 6.626,  "NUL_kg": 154.548,  "M50": 0.5 * (6.626 + 154.548)},
+        {"name": "CP90/250",        "NLL_kg": 19.319, "NUL_kg": 414.063,  "M50": 0.5 * (19.319 + 414.063)},
+        {"name": "CP45/180",        "NLL_kg": 2.415,  "NUL_kg": 154.548,  "M50": 0.5 * (2.415 + 154.548)},
+        {"name": "CP90/180",        "NLL_kg": 19.319, "NUL_kg": 154.548,  "M50": 0.5 * (19.319 + 154.548)},
 
         # --- Light Mass Armourstone (LMA) ---
         {"name": "LMA 5-40",        "NLL_kg": 5,     "NUL_kg": 40,     "M50": 0.5 * (5 + 40)},
@@ -206,6 +212,137 @@ class RockStandards:
                 min_diff = diff
                 closest_grade = grade
         return closest_grade
+
+    @staticmethod
+    def grading_family(grading_name):
+        """Returns the grading family label: HMA, LMA, CP, or UNKNOWN."""
+        if grading_name.startswith('HMA '):
+            return 'HMA'
+        if grading_name.startswith('LMA '):
+            return 'LMA'
+        if grading_name.startswith('CP'):
+            return 'CP'
+        return 'UNKNOWN'
+
+    @staticmethod
+    def get_family_gradings(family):
+        """Returns all gradings belonging to a specific family, sorted by M50."""
+        family = (family or '').upper()
+        return sorted(
+            [g for g in RockStandards.GRADINGS if RockStandards.grading_family(g.get('name', '')) == family],
+            key=lambda x: x.get('M50', float('inf'))
+        )
+
+    @staticmethod
+    def select_custom_family(target_mass_kg):
+        """
+        Selects the closest grading family in log(M50) space.
+        A mild bias is applied against CP when distances are nearly equal, matching
+        the engineering preference used in the C++ CLI.
+        """
+        safe_mass = max(float(target_mass_kg), 1e-9)
+        best_score = float('inf')
+        best_family = 'LMA'
+
+        for grade in RockStandards.GRADINGS:
+            family = RockStandards.grading_family(grade.get('name', ''))
+            if family == 'UNKNOWN':
+                continue
+            m50 = max(float(grade.get('M50', 0.0)), 1e-9)
+            score = abs(math.log(safe_mass) - math.log(m50))
+            if family == 'CP':
+                score += 0.08
+            if score < best_score:
+                best_score = score
+                best_family = family
+
+        return best_family
+
+    @staticmethod
+    def interpolate_family_ratio(target_mass_kg, family):
+        """
+        Interpolates the nominal bandwidth ratio R = NUL / NLL within a grading
+        family as a function of target representative mass M50.
+
+        The interpolation is carried out in log(M50) - log(R) space, matching the
+        methodology implemented in the C++ CLI.
+
+        Returns:
+            tuple[float, str]: interpolated ratio and explanatory note.
+        """
+        family_gradings = RockStandards.get_family_gradings(family)
+        if not family_gradings:
+            return 3.0, 'fallback ratio R=NUL/NLL = 3.0 (no family data)'
+
+        x_vals = [math.log(max(float(g.get('M50', 0.0)), 1e-9)) for g in family_gradings]
+        y_vals = [math.log(max(float(g.get('NUL_kg', 0.0)) / max(float(g.get('NLL_kg', 0.0)), 1e-9), 1.0 + 1e-9)) for g in family_gradings]
+        xt = math.log(max(float(target_mass_kg), 1e-9))
+
+        if len(family_gradings) == 1:
+            ratio = float(family_gradings[0]['NUL_kg']) / float(family_gradings[0]['NLL_kg'])
+            return ratio, f"{family} family single-point ratio used"
+
+        if xt <= x_vals[0]:
+            ratio = math.exp(y_vals[0])
+            return ratio, f"{family} family ratio clamped to lower-end class {family_gradings[0]['name']}"
+
+        if xt >= x_vals[-1]:
+            ratio = math.exp(y_vals[-1])
+            return ratio, f"{family} family ratio clamped to upper-end class {family_gradings[-1]['name']}"
+
+        for i in range(len(family_gradings) - 1):
+            if x_vals[i] <= xt <= x_vals[i + 1]:
+                t = (xt - x_vals[i]) / (x_vals[i + 1] - x_vals[i])
+                log_ratio = y_vals[i] + t * (y_vals[i + 1] - y_vals[i])
+                ratio = math.exp(log_ratio)
+                note = (
+                    f"{family} family ratio interpolated between "
+                    f"{family_gradings[i]['name']} and {family_gradings[i + 1]['name']}"
+                )
+                return ratio, note
+
+        ratio = math.exp(y_vals[-1])
+        return ratio, f"{family} family ratio fallback to upper-end class {family_gradings[-1]['name']}"
+
+    @staticmethod
+    def build_custom_interpolated_grading(target_mass_kg, custom_family='AUTO'):
+        """
+        Builds a custom grading band from a target representative mass M50 using
+        the interpolated family ratio methodology implemented in the C++ CLI.
+
+        Methodology:
+            1. Choose the grading family (explicitly or by automatic family selection).
+            2. Interpolate R = NUL / NLL within that family as a function of target M50.
+            3. Derive the nominal grading interval from:
+                   NLL = 2*M50 / (1 + R)
+                   NUL = 2*M50*R / (1 + R)
+            4. Derive the extreme limits from:
+                   ELL = 0.7*NLL
+                   EUL = 1.5*NUL
+        """
+        family = (custom_family or 'AUTO').upper()
+        if family not in ('HMA', 'LMA', 'CP'):
+            family = RockStandards.select_custom_family(target_mass_kg)
+
+        ratio, note = RockStandards.interpolate_family_ratio(target_mass_kg, family)
+        ratio = max(float(ratio), 1.01)
+
+        nll_kg = (2.0 * float(target_mass_kg)) / (1.0 + ratio)
+        nul_kg = ratio * nll_kg
+        ell_kg = 0.7 * nll_kg
+        eul_kg = 1.5 * nul_kg
+
+        return {
+            'name': 'Custom Interpolated Grading',
+            'family': family,
+            'ratio_nul_nll': ratio,
+            'ratio_note': note,
+            'NLL_kg': nll_kg,
+            'NUL_kg': nul_kg,
+            'ELL_kg': ell_kg,
+            'EUL_kg': eul_kg,
+            'M50': float(target_mass_kg),
+        }
 
 class CoastalConstants:
     """
@@ -895,23 +1032,92 @@ class IntelligentDesignEngine:
         
         return rec_res
 
-    def present_layer_design(self, params, target_dn, target_mass, grading_EN13383=True):
+    def present_layer_design(self, params, target_dn, target_mass, grading_EN13383=True, custom_family='AUTO'):
         """
         Generates the design output for Primary Armor and Underlayers.
         Calculates weights, diameters, and packing densities.
-        Uses EN 13383 standard gradings if enabled, or a custom power law distribution.
+        Uses EN 13383 standard gradings if enabled, or the same custom interpolated
+        grading methodology implemented in the C++ CLI.
         """
-        
+
+        def build_standard_design(target_mass_local, target_dn_local, underlayer=False):
+            if underlayer:
+                grading = RockStandards.get_closest_grading(target_mass_local)
+                if not grading:
+                    return None
+            else:
+                grading = RockStandards.get_grading(target_mass_local)
+                if not grading:
+                    return None
+
+            nll_kg = grading.get('NLL_kg', 0.0)
+            nul_kg = grading.get('NUL_kg', 0.0)
+            m_mean_kg = grading.get('M50', 0.0)
+            w_mean_kn = m_mean_kg * g / 1000.0
+            return {
+                'grading_name': grading['name'],
+                'nll_kg': nll_kg,
+                'nul_kg': nul_kg,
+                'ell_kg': 0.7 * nll_kg,
+                'eul_kg': 1.5 * nul_kg,
+                'm_mean_kg': m_mean_kg,
+                'w_mean_kn': w_mean_kn,
+                'actual_dn': (w_mean_kn / gamma_r)**(1.0 / 3.0),
+                'used_custom_interpolation': False,
+                'custom_family': '',
+                'custom_ratio_nul_nll': 0.0,
+                'custom_ratio_note': '',
+            }
+
+        def build_custom_design(target_mass_local, target_dn_local, underlayer=False):
+            custom = RockStandards.build_custom_interpolated_grading(target_mass_local, custom_family)
+            return {
+                'grading_name': 'Custom Interpolated Grading Underlayer' if underlayer else 'Custom Interpolated Grading',
+                'nll_kg': custom['NLL_kg'],
+                'nul_kg': custom['NUL_kg'],
+                'ell_kg': custom['ELL_kg'],
+                'eul_kg': custom['EUL_kg'],
+                'm_mean_kg': target_mass_local,
+                'w_mean_kn': target_mass_local * g / 1000.0,
+                'actual_dn': target_dn_local,
+                'used_custom_interpolation': True,
+                'custom_family': custom['family'],
+                'custom_ratio_nul_nll': custom['ratio_nul_nll'],
+                'custom_ratio_note': custom['ratio_note'],
+            }
+
+        def log_layer_block(design, mass_fmt='.0f'):
+            layer_thickness = 2.0 * 1.0 * design['actual_dn']
+            packing_density_per_m2 = 2.0 * 1.0 * (1.0 - 0.30) / (design['actual_dn'] ** 2)
+            packing_density_100m2 = packing_density_per_m2 * 100.0
+
+            self.log(f"   Adopted rock grading                : {design['grading_name']}")
+
+            if design['used_custom_interpolation']:
+                self.log(f"   Custom family basis                 : {design['custom_family']}")
+                self.log(f"   Interpolated ratio (NUL/NLL)        : {design['custom_ratio_nul_nll']:.3f}")
+                self.log(f"   Interpolation rule                  : {design['custom_ratio_note']}")
+
+            self.log(f"   Representative M50                  : {format(design['m_mean_kg'], mass_fmt)} kg")
+            self.log(f"   Nominal lower limit (NLL)           : {format(design['nll_kg'], mass_fmt)} kg")
+            self.log(f"   Nominal upper limit (NUL)           : {format(design['nul_kg'], mass_fmt)} kg")
+            self.log(f"   Extreme lower limit (ELL)           : {format(design['ell_kg'], mass_fmt)} kg")
+            self.log(f"   Extreme upper limit (EUL)           : {format(design['eul_kg'], mass_fmt)} kg")
+            self.log(f"   Nominal Diameter (Dn_rock)          : {design['actual_dn']:.3f} m")
+            self.log(f"   Double Layer Thickness              : {layer_thickness:.2f} m")
+            self.log(f"   Packing Density [rocks/100m2]       : {packing_density_100m2:.2f}")
+            return design['m_mean_kg']
+
         # --- 1. PRIMARY ARMOR LAYER ---
         target_weight_kn = target_mass * CoastalConstants.G / 1000.0
-        
-        self.log("\n" + "="*95)
+
+        self.log("\n" + "=" * 95)
         if grading_EN13383:
             self.log("   4. ROCK ARMOUR LAYER DESIGN (EN 13383 Standard)")
         else:
-            self.log("   4. ROCK ARMOUR LAYER DESIGN (Custom Grading)")
-        self.log("="*95)
-        
+            self.log("   4. ROCK ARMOUR LAYER DESIGN (Custom Interpolated Grading)")
+        self.log("=" * 95)
+
         self.log("PRIMARY ARMOR LAYER")
         self.log(f"   Theoretical Required W    : {target_weight_kn:.2f} kN")
         self.log(f"   Theoretical Required M50  : {target_mass:.0f} kg")
@@ -920,140 +1126,38 @@ class IntelligentDesignEngine:
 
         g = CoastalConstants.G
         gamma_r = params.rho_r * g / 1000.0
-        
-        # --- LOGIC BRANCH: EN13383 vs Custom ---
+
         if grading_EN13383:
-            grading_armor = RockStandards.get_grading(target_mass)
-            if not grading_armor:
+            armor_design = build_standard_design(target_mass, target_dn, underlayer=False)
+            if not armor_design:
                 self.log("   [WARNING] No standard EN13383 grading found for this mass.")
                 return
-            else:
-                nll_kg = grading_armor.get('NLL_kg', 0)
-                nul_kg = grading_armor.get('NUL_kg', 0)
-                ell_kg = 0.7 * nll_kg
-                eul_kg = 1.5 * nul_kg
-                m_mean_kg = grading_armor.get('M50', 0)
-                w_mean_kn = m_mean_kg * g / 1000.0
-                actual_dn = (w_mean_kn / gamma_r)**(1.0/3.0)
-                grading_name = grading_armor['name']
         else:
-            # --- CUSTOM POWER LAW CALCULATION ---
-            x_val = target_mass 
-            
-            a_min = 1.056832014477894E+00
-            b_min = 1.482769823574055E+00
-            c_min = -2.476127406338004E-01
-            factor_min = a_min / (1 + (x_val / b_min)**c_min)
-            w_min_kg_calc = target_mass * factor_min
-            w_min_kn = (w_min_kg_calc * g) / 1000.0
-            
-            a_max = 1.713085676568561E+00
-            b_max = 2.460481255856126E+05
-            c_max = 1.327263214034671E-01
-            factor_max = a_max / (1 + (x_val / b_max)**c_max)
-            w_max_kg_calc = target_mass * factor_max
-            w_max_kn = (w_max_kg_calc * g) / 1000.0
-            
-            w_mean_kn = target_weight_kn
-            m_mean_kg = target_mass
-            actual_dn = target_dn
-            grading_name = "Custom Grading"
-            
-            # Calculate weights in kg for display (Custom only)
-            w_min_kg = (w_min_kn * 1000) / g
-            w_max_kg = (w_max_kn * 1000) / g
+            armor_design = build_custom_design(target_mass, target_dn, underlayer=False)
 
-        # Calculate Layer Geometry
-        layer_thickness = 2 * 1.0 * actual_dn
-        packing_density_per_m2 = 2 * 1.0 * (1 - 0.30) / (actual_dn**2)
-        packing_density_100m2 = packing_density_per_m2 * 100
-
-        self.log(f"   Adopted rock grading                : {grading_name}")
-        
-        # Display logic branches based on EN13383 vs Custom
-        if grading_EN13383:
-            self.log(f"   Representative M50                  : {m_mean_kg:.0f} kg")
-            self.log(f"   Nominal lower limit (NLL)           : {nll_kg:.0f} kg")
-            self.log(f"   Nominal upper limit (NUL)           : {nul_kg:.0f} kg")
-            self.log(f"   Extreme lower limit (ELL)           : {ell_kg:.0f} kg")
-            self.log(f"   Extreme upper limit (EUL)           : {eul_kg:.0f} kg")
-        else:
-            self.log(f"   Grading Min (Lower Limit)           : {w_min_kn:.2f} kN ({w_min_kg:.0f} kg)")
-            self.log(f"   Grading Max (Upper Limit)           : {w_max_kn:.2f} kN ({w_max_kg:.0f} kg)")
-            self.log(f"   Representative M50                  : {m_mean_kg:.0f} kg")
-
-        self.log(f"   Nominal Diameter (Dn_rock)          : {actual_dn:.3f} m")
-        self.log(f"   Double Layer Thickness              : {layer_thickness:.2f} m")
-        self.log(f"   Packing Density [rocks/100m2]       : {packing_density_100m2:.2f}")
+        adopted_m50_armor = log_layer_block(armor_design, mass_fmt='.0f')
         self.log("-" * 95)
 
         # --- 2. UNDERLAYER ---
-        # Standard design practice: Filter layer mass is typically M50/10 to M50/15
-        target_mass_ul = m_mean_kg / 10.0
+        target_mass_ul = adopted_m50_armor / 10.0
         target_weight_kn_ul = target_mass_ul * CoastalConstants.G / 1000.0
-        
+        target_dn_ul = (target_weight_kn_ul / gamma_r) ** (1.0 / 3.0)
+
         self.log("UNDERLAYER (FILTER LAYER)")
         self.log(f"   Target Weight (M50 / 10)  : {target_weight_kn_ul:.3f} kN")
         self.log(f"   Target Mass (M50 / 10)    : {target_mass_ul:.1f} kg")
         self.log("-" * 40)
-        
-        if grading_EN13383:
-            grading_ul = RockStandards.get_closest_grading(target_mass_ul)
-            if grading_ul:
-                nll_kg_ul = grading_ul.get('NLL_kg', 0)
-                nul_kg_ul = grading_ul.get('NUL_kg', 0)
-                ell_kg_ul = 0.7 * nll_kg_ul
-                eul_kg_ul = 1.5 * nul_kg_ul
-                m_mean_kg_ul = grading_ul.get('M50', 0)
-                w_mean_kn_ul = m_mean_kg_ul * g / 1000.0
-                actual_dn_ul = (w_mean_kn_ul / gamma_r)**(1.0/3.0)
-                grading_name_ul = grading_ul['name']
-            else:
-                 self.log("   [WARNING] No suitable standard underlayer grading found.")
-                 return
-        else:
-            # Custom Approach for Underlayer
-            x_val_ul = target_mass_ul
-            a_min = 1.056832014477894E+00
-            b_min = 1.482769823574055E+00
-            c_min = -2.476127406338004E-01
-            w_min_kn_ul = target_weight_kn_ul * a_min / (1 + (x_val_ul / b_min)**c_min)
-            
-            a_max = 1.713085676568561E+00
-            b_max = 2.460481255856126E+05
-            c_max = 1.327263214034671E-01
-            w_max_kn_ul = target_weight_kn_ul * a_max / (1 + (x_val_ul / b_max)**c_max)
-            
-            w_mean_kn_ul = target_weight_kn_ul
-            m_mean_kg_ul = target_mass_ul
-            actual_dn_ul = (w_mean_kn_ul / gamma_r)**(1.0/3.0)
-            grading_name_ul = "Custom Grading Underlayer"
-            
-            # Calculate weights in kg for display (Custom only)
-            w_min_kg_ul = (w_min_kn_ul * 1000) / g
-            w_max_kg_ul = (w_max_kn_ul * 1000) / g
 
-        layer_thickness_ul = 2 * 1.0 * actual_dn_ul
-        packing_density_per_m2_ul = 2 * 1.0 * (1 - 0.30) / (actual_dn_ul**2)
-        packing_density_100m2_ul = packing_density_per_m2_ul * 100
-        
-        self.log(f"   Adopted rock grading                : {grading_name_ul}")
-        
         if grading_EN13383:
-            self.log(f"   Representative M50                  : {m_mean_kg_ul:.1f} kg")
-            self.log(f"   Nominal lower limit (NLL)           : {nll_kg_ul:.1f} kg")
-            self.log(f"   Nominal upper limit (NUL)           : {nul_kg_ul:.1f} kg")
-            self.log(f"   Extreme lower limit (ELL)           : {ell_kg_ul:.1f} kg")
-            self.log(f"   Extreme upper limit (EUL)           : {eul_kg_ul:.1f} kg")
+            underlayer_design = build_standard_design(target_mass_ul, target_dn_ul, underlayer=True)
+            if not underlayer_design:
+                self.log("   [WARNING] No suitable standard underlayer grading found.")
+                return
         else:
-            self.log(f"   Grading Min (Lower Limit)           : {w_min_kn_ul:.2f} kN ({w_min_kg_ul:.0f} kg)")
-            self.log(f"   Grading Max (Upper Limit)           : {w_max_kn_ul:.2f} kN ({w_max_kg_ul:.0f} kg)")
-            self.log(f"   Representative M50                  : {m_mean_kg_ul:.1f} kg")
+            underlayer_design = build_custom_design(target_mass_ul, target_dn_ul, underlayer=True)
 
-        self.log(f"   Nominal Diameter (Dn_rock)          : {actual_dn_ul:.3f} m")
-        self.log(f"   Double Layer Thickness              : {layer_thickness_ul:.2f} m")
-        self.log(f"   Packing Density [rocks/100m2]       : {packing_density_100m2_ul:.2f}")
-        self.log("="*95 + "\n")
+        log_layer_block(underlayer_design, mass_fmt='.1f')
+        self.log("=" * 95 + "\n")
 
 # ==============================================================================
 # 5. MAIN EXECUTION
@@ -1102,6 +1206,12 @@ def main():
     
     # Grading Selection Flag
     grading_EN13383 = get_input("Use EN13383 Standard Grading? (True/False)", DEFAULT_CONFIG['grading_EN13383'], bool)
+
+    custom_family = DEFAULT_CONFIG['custom_family']
+    if not grading_EN13383:
+        custom_family = input(f"Custom grading family [AUTO/HMA/LMA/CP] [default: {DEFAULT_CONFIG['custom_family']}]: " ).strip().upper() or DEFAULT_CONFIG['custom_family']
+        if custom_family not in ('AUTO', 'HMA', 'LMA', 'CP'):
+            custom_family = 'AUTO'
 
     # Manual Selection Flag
     manual_selection = get_input("Choose stability formula instead of automatic (True/False)", False, bool)
@@ -1191,7 +1301,7 @@ def main():
     # --- Step 6: Final Design Presentation ---
     if best_res:
         m50 = calc.get_mass(best_res['Dn'], p.rho_r)
-        engine.present_layer_design(p, best_res['Dn'], m50, grading_EN13383)
+        engine.present_layer_design(p, best_res['Dn'], m50, grading_EN13383, custom_family)
         
     engine.save_logs()
 

@@ -46,14 +46,14 @@ The transition to the **Van der Meer formulae** (1988) marked a paradigm shift, 
 However, original derivations relied on the mean wave period ($T_m$) and were constrained largely to deep-water conditions where the Rayleigh distribution of wave heights holds valid.
 
 **Spectral Characterization and Shallow Water Complexity:**
-Contemporary coastal engineering has moved toward spectral characterization, utilizing the spectral energy period ($T_{m-1,0}$) to better account for bimodal seas and shallow water spectral flattening. In shallow water, the wave height distribution deviates from Rayleigh, and the shape of the spectrum changes due to triad wave interactions. This necessitates formulas that include parameters like the wave height ratio ($H_{2\%}/H_{s}$) or physical permeability coefficients ($C_p$) rather than notional ones.
+Contemporary coastal engineering has moved toward spectral characterization, utilizing the spectral energy period ($T_{m-1,0}$) to better account for bimodal seas and shallow water spectral flattening. In shallow water, the wave height distribution deviates from Rayleigh, and the shape of the spectrum changes due to triad wave interactions. This necessitates formulas that include parameters like the wave height ratio ($H_{2\%}/H_s$) or physical permeability coefficients ($C_p$) rather than notional ones.
 
 **The "Permissible Damage" Philosophy:**
 Modern design does not seek "zero movement" but rather "permissible damage" over a service life. This probabilistic approach acknowledges that granular structures are flexible. They can reshape under extreme loads without catastrophic failure, unlike rigid concrete structures. The calculator's use of the damage parameter ($S_d$) allows engineers to design for specific performance levels, from "Start of Damage" to "Intermediate Damage" (reshaping).
 
 **The Frontier of Knowledge:**
 Despite these advancements, the physics of extremely shallow water remains a frontier of research where standard assumptions often break down. As explicitly stated by **Van der Meer et al. (2024)**: 
-> *"In summary, for shallow water conditions with $h/H_{m0,\mathrm{deep}} < 1.5$, there is currently no reliable method to describe the stability of rock slopes under wave attack."*
+> *"In summary, for shallow water conditions with $h/H_{m0~deep} < 1.5$, there is currently no reliable method to describe the stability of rock slopes under wave attack."*
 
 This software utilizes the newest 2025 research, specifically the works by Van der Meer et al., Van Gent et al. and Scaravaglione et al., to bridge this specific gap and provide valid predictions where traditional methods fail.
 
@@ -110,7 +110,7 @@ This dimensionless parameter acts as the primary switch in the calculator's algo
 The calculator divides the coastal profile into four distinct zones based on the latest research by *Van der Meer et al. (2024)* and *Scaravaglione et al. (2025)*:
 
 * **Zone 1: Deep / Intermediate Water ($h/H_{m0} > 3.0$)**
-    * **Physics:** Rayleigh wave distribution ($H_{2\%}/H_{s} \approx 1.4$). No depth-induced breaking.
+    * **Physics:** Rayleigh wave distribution ($H_{2\%}/H_s \approx 1.4$). No depth-induced breaking.
     * **Recommended Formula:** **[2] Van der Meer (2021)**.
     * **Rationale:** The rewritten formula using spectral period $T_{m-1,0}$ is the industry standard for non-depth-limited conditions.
 
@@ -180,13 +180,13 @@ Despite its historical ubiquity, the Hudson formula possesses profound limitatio
 To adapt this static legacy method to the calculator's advanced zonated logic, the software does not use a fixed coefficient but instead applies a **Dynamic Selection based on the active hydraulic zone**. The algorithm assesses the relative depth to adjust the coefficient, mimicking the physical destabilization observed in shallower waters. In **Deep Water**, the calculator applies the standard non-breaking $K_D$ of **4.0**. As the relative depth decreases into the **Shallow Water** zone, the coefficient is reduced to **3.5**. In the **Very Shallow Water** zone, it is further lowered to **3.0**, and finally, for the highly turbulent **Swash Zone**, a conservative $K_D$ of **2.0** is automatically applied. This dynamic adjustment ensures that even the legacy baseline reflects the increased hydraulic demand of the surf zone, aligning the 1959 formula with the breaking wave constraints introduced in the 1984 SPM.
 
 **Equation:**
-$$\frac{H_{1/10}}{\Delta D_{n50}} = \frac{1.27 H_{s}}{\Delta D_{n50}} = (K_D \cot \alpha)^{1/3}$$
+$$\frac{H_{1/10}}{\Delta D_{n50}} = \frac{1.27 H_s}{\Delta D_{n50}} = (K_D \cot \alpha)^{1/3}$$
 
 **Explanation:**
 * **Purpose:** Developed by the USACE to provide a simple, robust design tool for rubble mounds using regular waves. It aggregates complex physics into the **$K_D$ coefficient**.
 * **Capabilities:** Excellent for preliminary sizing and comparison. It is mathematically simple and widely understood. It forms the basis of many regulatory guidelines.
 * **Limitations:** It **ignores the wave period ($T$) and storm duration ($N$)**. It treats plunging and surging waves identically, which can lead to unsafe designs for long-period swells (surging) or overly conservative designs for short steep waves.
-* **Historical Note on $K_D$:** In the Shore Protection Manual of 1984 (SPM, 1984), not only was the coefficient 1.27 introduced (shifting design wave from $H_{s}$ to $H_{1/10}$), but the value of $K_D$ for breaking waves was revised and decreased from **3.5 to 2.0**, while for non-breaking waves it remained **4.0**.
+* **Historical Note on $K_D$:** In the Shore Protection Manual of 1984 (SPM, 1984), not only was the coefficient 1.27 introduced (shifting design wave from $H_s$ to $H_{1/10}$), but the value of $K_D$ for breaking waves was revised and decreased from **3.5 to 2.0**, while for non-breaking waves it remained **4.0**.
 * **Recommendation:** In contrast to the SPM (1984), research by Van der Meer suggests it is recommended to use **$K_D=4$** for the design of structures with a permeable core, irrespective of whether the conditions are with breaking waves on the foreshore or not.
 
 **Dynamic $K_D$ Selection:**
@@ -228,7 +228,7 @@ $$N_s = c_{su} \cdot P^{-0.13} \cdot \left(\frac{S}{\sqrt{N}}\right)^{0.2} \cdot
 **Explanation:**
 * **Purpose:** To provide a scientifically rigorous stability prediction that accounts for the influence of wave period, permeability, and storm duration in deep to intermediate water.
 * **Capabilities:** It is the **current state-of-the-art for standard breakwater design**. By using $T_{m-1,0}$, it handles bimodal spectra effectively. It accurately predicts the transition from erosive (plunging) failure to sliding (surging) failure.
-* **Limitations:** It assumes a **Rayleigh wave height distribution ($H_{2\%}/H_{s} \approx 1.4$)**. In shallow water where waves are depth-limited and the distribution is truncated, this assumption may lead to inaccuracies if not corrected.
+* **Limitations:** It assumes a **Rayleigh wave height distribution ($H_{2\%}/H_s \approx 1.4$)**. In shallow water where waves are depth-limited and the distribution is truncated, this assumption may lead to inaccuracies if not corrected.
 
 ### [3] Van Gent Modified (2003)
 The **Van Gent Modified (2003)** formulation represents a targeted recalibration of the original Van der Meer equations, specifically engineered to address the hydrodynamic complexities of **shallow foreshores** where standard deep-water assumptions fail. Originating from the experimental insights of Smith et al. (2002) and rigorously extended by Van Gent et al. (2003), this method utilized a specialized dataset of 207 physical model tests conducted with 1:30 and 1:100 foreshore slopes. The primary scientific motivation was to correct the inaccuracies observed when applying Rayleigh-based stability models to depth-limited wave conditions. In deep water, the ratio of the exceedance wave height to the significant wave height is constant at approximately 1.4; however, as waves propagate onto a shallow foreshore, **depth-induced breaking truncates the wave height distribution**, significantly reducing this ratio. The Van Gent Modified formula explicitly integrates this ratio as a governing parameter with an inverse relationship (exponent -1), thereby dynamically adjusting the calculated stability based on the actual statistical distribution of the wave field at the structure's toe.
@@ -237,12 +237,12 @@ A further critical refinement in this formulation is the strict adherence to the
 
 **Modified Plunging ($\xi_{m-1,0} < \xi_{cr}$):**
 $$
-\frac{H_{s}}{\Delta D_{n50}} = 8.4 P^{0.18} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_{s}}{H_{2\%}} \right) \xi_{m-1,0}^{-0.5}
+\frac{H_s}{\Delta D_{n50}} = 8.4 P^{0.18} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H_{2\%}} \right) \xi_{m-1,0}^{-0.5}
 $$
 
 **Modified Surging ($\xi_{m-1,0} \ge \xi_{cr}$):**
 $$
-\frac{H_{s}}{\Delta D_{n50}} = 1.3 P^{-0.13} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_{s}}{H_{2\%}} \right) \sqrt{\cot \alpha} \xi_{m-1,0}^{P}
+\frac{H_s}{\Delta D_{n50}} = 1.3 P^{-0.13} \left( \frac{S_d}{\sqrt{N}} \right)^{0.2} \left( \frac{H_s}{H_{2\%}} \right) \sqrt{\cot \alpha} \xi_{m-1,0}^{P}
 $$
 
 *(Notes: The Rock Manual suggests using optimized coefficients closer to $c_{pl(mod)} = 8.4$ and $c_{s(mod)} = 1.3$ when the explicit wave height ratio $H_{2\%}/H_{s}$ is included. Exact formulation may vary slightly between subsequent publications or recalibrations).*
@@ -302,7 +302,7 @@ $$N_s = 3.9 \cdot C_p \cdot N^{-0.1} \cdot S^{1/6} \cdot \xi_{m-1,0}^{-1/3} \cdo
 
 **Explanation:**
 * **Purpose:** To provide a single, unified formula derived from data mining (M5 model tree) a vast dataset of historical tests, bridging deep and shallow water contexts.
-* **Capabilities:** It replaces the notional permeability $P$ with a measurable physical coefficient $C_p$. Crucially, it includes the parameter $m$ (tangent of the *foreshore* slope, i.e., $m = 1.0 / \mathrm{foreshore\_cot}$), allowing it to account for wave transformation and shoaling effects occurring *before* the wave reaches the structure.
+* **Capabilities:** It replaces the notional permeability $P$ with a measurable physical coefficient $C_p$. Crucially, it includes the parameter $m$ (tangent of the *foreshore* slope, i.e., $m = 1.0 / \text{foreshore\_cot}$), allowing it to account for wave transformation and shoaling effects occurring *before* the wave reaches the structure.
 * **Limitations:** While statistically powerful, it lacks the specific calibration for the highly turbulent bore-flow of the surf zone, leading to **potential overestimation of stability in very shallow water** as shown by Scaravaglione (2025).
 
 ### [7] Scaravaglione Mod. VG (2025)
@@ -395,17 +395,97 @@ These gradings are generally specified by sieve size (mm) but have defined mass 
 
 | Grading Class | NLL (kg) | NUL (kg) | ELL (kg) | EUL (kg) |
 | --- | --- | --- | --- | --- |
-| **CP 45/125** | 0.4 | 1.2 | 0.28 | 1.8 |
-| **CP 63/180** | 1.2 | 3.8 | 0.84 | 5.7 |
-| **CP 90/250** | 3.1 | 9.3 | 2.17 | 13.95 |
-| **CP 45/180** | 0.4 | 1.2 | 0.28 | 1.8 |
-| **CP 90/180** | 2.1 | 2.8 | 1.47 | 4.2 |
+| **CP 32/90** | 0.868 | 19.319 | 0.6076 | 28.9785 |
+| **CP 45/125** | 2.415 | 51.758 | 1.6905 | 77.637 |
+| **CP 63/180** | 6.626 | 154.548 | 4.6382 | 231.822 |
+| **CP 90/250** | 19.319 | 414.063 | 13.5233 | 621.0945 |
+| **CP 45/180** | 2.415 | 154.548 | 1.6905 | 231.822 |
+| **CP 90/180** | 19.319 | 154.548 | 13.5233 | 231.822 |
 
-### Custom Power Law Grading
+### Custom Interpolated Grading
 
-For projects requiring non-standard rock sizes, or when the target mass falls outside all standard EN 13383 nominal limits (e.g., very large armor >15t or specific quarry yields), the calculator switches to a **Custom Grading** mode.
+For projects requiring non-standard rock sizes, or when the target mass falls outside all standard EN 13383 nominal limits (for example very large armour, special quarry production, or underlayer optimisation), the calculator switches to a **Custom Grading** mode.
 
-In this mode, the software generates theoretical mass limits based on the calculated target M50. It uses a power law distribution to estimate a theoretical  and  that would provide stability equivalent to the target mass, ensuring a constructible layer thickness is still calculated.
+This custom mode no longer uses a free, unconstrained power law to define the grading bandwidth. Instead, the custom grading is anchored to the same nominal bandwidth logic used by the tabulated standard classes. The objective is that the custom grading range remains consistent with the characteristic **Nominal Upper Limit / Nominal Lower Limit** ratio observed in the relevant grading family.
+
+#### Custom grading families
+
+The custom grading logic is based on one of the following families:
+
+* **HMA** — Heavy Mass Armourstone
+* **LMA** — Light Mass Armourstone
+* **CP** — Coarse Particle
+* **AUTO** — automatic family selection by the calculator
+
+When **AUTO** is used, the calculator selects the grading family whose standard classes are most compatible with the target mass level. In practice, this is done by comparing the target **$M_{50}$** with the representative masses of the available standard classes and choosing the closest family basis. This avoids applying a narrow HMA-type bandwidth to an LMA-type grading, or vice versa.
+
+#### Interpolated grading ratio
+
+For each standard class in a family, the nominal grading bandwidth is described by the ratio:
+
+$$
+R = \frac{NUL}{NLL}
+$$
+
+For a custom grading, the calculator interpolates this ratio as a function of the target representative mass **$M_{50}$**, using the tabulated standard classes of the selected family as anchor points. In other words, the standard classes define how wide the grading should be at different mass levels, and the custom grading inherits that behaviour continuously rather than by a discontinuous class jump.
+
+This means that the custom grading remains consistent with the EN 13383-style family logic:
+
+* **HMA** custom gradings inherit the comparatively narrower HMA nominal bandwidths;
+* **LMA** custom gradings inherit the wider LMA nominal bandwidths;
+* **CP** custom gradings inherit the mass-equivalent bandwidths associated with the CP classes.
+
+#### Derivation of nominal limits from target $M_{50}$
+
+Once the interpolated nominal ratio **$R$** has been obtained, the custom grading is derived from the target representative mass **$M_{50}$** using the same internal definition adopted throughout the calculator:
+
+$$
+M_{50} = \frac{NLL + NUL}{2}
+$$
+
+combined with
+
+$$
+R = \frac{NUL}{NLL}
+$$
+
+which gives:
+
+$$
+NLL = \frac{2M_{50}}{1+R}
+$$
+
+$$
+NUL = \frac{2M_{50}R}{1+R}
+$$
+
+The extreme limits are then derived using the same quality-control conventions as for the standard classes:
+
+$$
+ELL = 0.7\,NLL
+$$
+
+$$
+EUL = 1.5\,NUL
+$$
+
+Accordingly, the full custom grading is no longer an arbitrary free band, but a grading envelope defined by:
+
+* **Representative mass:** $M_{50}$
+* **Interpolated nominal bandwidth ratio:** $R = NUL/NLL$
+* **Nominal limits:** $NLL$, $NUL$
+* **Extreme limits:** $ELL$, $EUL$
+
+#### Design rationale
+
+This revised custom grading methodology has several advantages over the previous free-form approach:
+
+* it preserves consistency with the grading bandwidths observed in the standard tables;
+* it prevents unrealistic custom gradings with excessively narrow or excessively broad nominal ranges;
+* it gives a smooth transition in grading width as the target mass changes;
+* it makes the custom grading logic transparent and auditable, because the resulting limits can always be traced back to the standard family basis.
+
+In summary, the custom grading is now defined by **family-consistent interpolation of the nominal ratio $NUL/NLL$ as a function of target $M_{50}$**, followed by direct calculation of **$NLL$**, **$NUL$**, **$ELL$**, and **$EUL$**. This provides a more defensible engineering basis for non-standard gradings than the previous unconstrained power-law bandwidth.
 
 ### Layer Geometry & Construction Formulas
 
@@ -490,7 +570,7 @@ The calculator code could also be updated to allow selection between **Random (B
 * **$H_{50}$**: Average wave height of the 50 highest waves (Etemad-Shahidi/Vidal notation).
 * **$H_{m0}$**: Spectral significant wave height, defined as $4\sqrt{m_0}$.
 * **$H_{m0,deep}$**: Spectral significant wave height in deep water.
-* **$H_{s}$**: Significant wave height (general term, often used interchangeably with $H_{1/3}$ or $H_{m0}$ depending on context).
+* **$H_s$**: Significant wave height (general term, often used interchangeably with $H_{1/3}$ or $H_{m0}$ depending on context).
 * **$K_D$**: Stability coefficient used in the Hudson formula.
 * **$k_t$**: Layer thickness coefficient.
 * **$LT$**: Length-to-thickness ratio of the armour stone units.
@@ -499,7 +579,7 @@ The calculator code could also be updated to allow selection between **Random (B
 * **$M_{50}$**: Median mass of the armour rock grading (50% value by sample mass).
 * **$N$** or **$N_w$**: Number of waves in the storm duration.
 * **$N_{od}$**: Number of displaced units (damage parameter used by Thompson & Shuttler).
-* **$N_s$**: Stability number, defined as $H_{s} / (\Delta D_{n50})$.
+* **$N_s$**: Stability number, defined as $H_s / (\Delta D_{n50})$.
 * **$n_v$**: Volumetric porosity of the armor layer.
 * **$P$**: Notional permeability factor (Van der Meer).
 * **$\Pi_0$**: Nonlinearity parameter (Goda).
@@ -525,44 +605,30 @@ The calculator code could also be updated to allow selection between **Random (B
 
 ## 10. Bibliography & Scientific References
 
-**1. U.S. Army Corps of Engineers. (1984).** *Shore Protection Manual. Vol. I & II.* Coastal Engineering Research Center, Vicksburg, MS.  
-[https://usace.contentdm.oclc.org/digital/collection/p16021coll11/id/1934/](https://usace.contentdm.oclc.org/digital/collection/p16021coll11/id/1934/)
+**1. U.S. Army Corps of Engineers. (1984).** *Shore Protection Manual. Vol. I & II.* Coastal Engineering Research Center, Vicksburg, MS. <https://usace.contentdm.oclc.org/digital/collection/p16021coll11/id/1934/>
 
-**2. Van der Meer, J. W. (1987).** "Stability of breakwater armour layers—Design formulae." *Coastal Engineering*, 11(3), 219-239.  
-[https://doi.org/10.1016/0378-3839(87)90013-5](https://doi.org/10.1016/0378-3839(87)90013-5)
+**2. Van der Meer, J. W. (1987).** "Stability of breakwater armour layers—Design formulae." *Coastal Engineering*, 11(3), 219-239. <https://doi.org/10.1016/0378-3839(87)90013-5>
 
-**3. Van der Meer, J. W. (1988).** *Rock Slopes and Gravel Beaches Under Wave Attack.* Doctoral Thesis, Delft University of Technology.  
-[https://repository.tudelft.nl/islandora/object/uuid:404b5nec-hm](https://repository.tudelft.nl/islandora/object/uuid:404b5nec-hm)
+**3. Van der Meer, J. W. (1988).** *Rock Slopes and Gravel Beaches Under Wave Attack.* Doctoral Thesis, Delft University of Technology. <https://resolver.tudelft.nl/uuid:67e5692c-0905-4ddd-8487-37fdda9af6b4>
 
-**4. Van Gent, M. R. A. (1995).** *Wave interaction with permeable coastal structures.* Doctoral Thesis, Delft University of Technology.  
-[https://repository.tudelft.nl/islandora/object/uuid:7bbff8e4-215d-4bfc-a3af-51cdecb754bd](https://repository.tudelft.nl/islandora/object/uuid:7bbff8e4-215d-4bfc-a3af-51cdecb754bd)
+**4. Van Gent, M. R. A. (1995).** *Wave interaction with permeable coastal structures.* Doctoral Thesis, Delft University of Technology. <https://resolver.tudelft.nl/uuid:7bbff8e4-215d-4bfc-a3af-51cdecb754bd>
 
-**5. U.S. Army Corps of Engineers (USACE). (2002).** "Coastal Engineering Manual." Engineer Manual 1110-2-1100, Washington, D.C.  
-[https://www.publications.usace.army.mil/USACE-Publications/Engineer-Manuals/](https://www.publications.usace.army.mil/USACE-Publications/Engineer-Manuals/)
+**5. U.S. Army Corps of Engineers (USACE). (2002).** *Coastal Engineering Manual.* Engineer Manual 1110-2-1100, Washington, D.C. <https://www.publications.usace.army.mil/USACE-Publications/Engineer-Manuals/u43544q/636F617374616C20656E67696E656572696E67206D616E75616C/>
 
-**6. Van Gent, M. R. A., Smale, A. J., & Kuiper, C. (2003).** "Stability of rock slopes with shallow foreshores." *Proceedings of Coastal Structures 2003*, Portland, OR, 100-112.  
-[https://doi.org/10.1061/40733(147)9](https://doi.org/10.1061/40733(147)9)
+**6. Van Gent, M. R. A., Smale, A. J., & Kuiper, C. (2003).** "Stability of rock slopes with shallow foreshores." *Proceedings of Coastal Structures 2003*, Portland, OR, 100-112. <https://doi.org/10.1061/40733(147)9>
 
-**7. Van Gent, M. R. A. (2004).** "On the stability of rock slopes." *Environmentally Friendly Coastal Protection: Proceedings of the NATO Advanced Research Workshop*, Varna, Bulgaria.  
-[https://doi.org/10.1007/1-4020-3301-X_12](https://doi.org/10.1007/1-4020-3301-X_12)
+**7. Van Gent, M. R. A. (2005).** "On the Stability of Rock Slopes." In *Environmentally Friendly Coastal Protection*, NATO Science Series, vol. 53. Springer, Dordrecht. <https://doi.org/10.1007/1-4020-3301-X_5>
 
-**8. CIRIA, CUR, CETMEF. (2007).** *The Rock Manual. The Use of Rock in Hydraulic Engineering.* (2nd edition). C683, CIRIA, London.  
-[https://www.ciria.org/ItemDetail?iProductCode=C683](https://www.ciria.org/ItemDetail?iProductCode=C683)
+**8. CIRIA, CUR, CETMEF. (2007).** *The Rock Manual. The Use of Rock in Hydraulic Engineering* (2nd edition). C683, CIRIA, London. <https://www.ciria.org/CIRIA/CIRIA/Item_Detail.aspx?=&iProductCode=C683>
 
-**9. CEN (2013).** "EN 13383-1:2013 Armourstone - Part 1: Specification." European Committee for Standardization.  
-[https://standards.iteh.ai/catalog/standards/cen/5f6b770f-38ba-4320-ad1a-83d0e29f7db2/en-13383-1-2013](https://standards.iteh.ai/catalog/standards/cen/5f6b770f-38ba-4320-ad1a-83d0e29f7db2/en-13383-1-2013)
+**9. CEN. (2013).** *EN 13383-1:2013 Armourstone - Part 1: Specification.* European Committee for Standardization. <https://standards.iteh.ai/catalog/standards/cen/5f6b770f-38ba-4320-ad1a-83d0e29f7db2/en-13383-1-2013>
 
-**10. Eldrup, M. R., & Lykke Andersen, T. (2019).** "Extension of shallow water rock armour stability formulae to nonlinear waves." *Coastal Engineering*, 153, 103536.  
-[https://doi.org/10.1016/j.coastaleng.2019.103536](https://doi.org/10.1016/j.coastaleng.2019.103536)
+**10. Eldrup, M. R., & Lykke Andersen, T. (2019).** "Extension of shallow water rock armour stability formulae to nonlinear waves." *Coastal Engineering*, 153, 103536. <https://doi.org/10.1016/j.coastaleng.2019.103536>
 
-**11. Etemad-Shahidi, A., Bali, M., & Van Gent, M. R. A. (2020).** "On the stability of rock armored rubble mound structures." *Coastal Engineering*, 158, 103655.  
-[https://doi.org/10.1016/j.coastaleng.2020.103655](https://doi.org/10.1016/j.coastaleng.2020.103655)
+**11. Etemad-Shahidi, A., Bali, M., & Van Gent, M. R. A. (2020).** "On the stability of rock armored rubble mound structures." *Coastal Engineering*, 158, 103655. <https://doi.org/10.1016/j.coastaleng.2020.103655>
 
-**12. Van der Meer, J. W. (2021).** "Rock armour slope stability under wave attack; the Van der Meer Formula revisited." *Journal of Coastal and Hydraulic Structures*, 1.  
-[https://doi.org/10.48438/jchs.2021.0008](https://doi.org/10.48438/jchs.2021.0008)
+**12. Van der Meer, J. W. (2021).** "Rock Armour Slope Stability under Wave Attack; the Van der Meer Formula revisited." *Journal of Coastal and Hydraulic Structures*, 1. <https://doi.org/10.48438/jchs.2021.0008>
 
-**13. Van der Meer, J. W., Lykke Andersen, T., & Roge Eldrup, M. (2024).** "Rock Armour Slope Stability under Wave Attack in Shallow Water." *Journal of Coastal and Hydraulic Structures*, 4.  
-[https://doi.org/10.59490/jchs.2024.0035](https://doi.org/10.59490/jchs.2024.0035)
+**13. Van der Meer, J. W., Lykke Andersen, T., & Roge Eldrup, M. (2024).** "Rock Armour Slope Stability under Wave Attack in Shallow Water." *Journal of Coastal and Hydraulic Structures*, 4. <https://doi.org/10.59490/jchs.2024.0035>
 
-**14. Scaravaglione, G., Marino, S., Francone, A., Leone, E., Damiani, L., Tomasicchio, G. R., Van Gent, M. R. A., & Saponieri, A. (2025).** "The influence of shallow water on rock armour stability." *Coastal Engineering*, 197, 104657.  
-[https://doi.org/10.1016/j.coastaleng.2024.104657](https://doi.org/10.1016/j.coastaleng.2024.104657)
+**14. Scaravaglione, G., Marino, S., Francone, A., Leone, E., Damiani, L., Tomasicchio, G. R., Van Gent, M. R. A., & Saponieri, A. (2025).** "The influence of shallow water on rock armour stability." *Coastal Engineering*, 197, 104657. <https://doi.org/10.1016/j.coastaleng.2024.104657>

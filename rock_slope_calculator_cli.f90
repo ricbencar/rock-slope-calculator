@@ -105,7 +105,7 @@
 !      rock_slope_calculator_cli.exe
 !
 !    Command Line Mode:
-!      rock_slope_calculator_cli.exe [Hs] [Tm] [h_toe] [slope] [fore] [rho_r] [P] [D_ratio] [Sd] [Duration] [UseEN13383]
+!      rock_slope_calculator_cli.exe [Hs] [Tm] [h_toe] [slope] [fore] [rho_r] [P] [D_ratio] [Sd] [Duration] [UseEN13383] [CustomFamily]
 !
 !    Example:
 !      rock_slope_calculator_cli.exe 2.5 10.0 6.0 2.0 30.0 2650 0.4 0.3 2.0 6.0 true
@@ -147,6 +147,7 @@ PROGRAM RockSlopeCalculator
         REAL(dp) :: duration    ! Storm Duration (hours)
         LOGICAL  :: use_en13383 ! Use Standard Grading
         LOGICAL  :: manual_selection ! Interactive manual selection flag
+        CHARACTER(LEN=8) :: custom_family ! AUTO, HMA, LMA, or CP when using custom grading
     END TYPE Inputs
 
     TYPE :: DerivedParams
@@ -167,8 +168,8 @@ PROGRAM RockSlopeCalculator
         REAL(dp) :: s_local     ! Local steepness
         REAL(dp) :: xi_m10      ! Surf similarity parameter
         REAL(dp) :: rel_depth   ! h / Hm0
-        CHARACTER(LEN=32) :: breaker_type
-        CHARACTER(LEN=100) :: zone_desc
+        CHARACTER(LEN=64) :: breaker_type
+        CHARACTER(LEN=128) :: zone_desc
     END TYPE Hydraulics
 
     TYPE :: FormulaResult
@@ -176,7 +177,7 @@ PROGRAM RockSlopeCalculator
         REAL(dp) :: Dn50
         REAL(dp) :: Ns
         REAL(dp) :: Kd
-        CHARACTER(LEN=100) :: note
+        CHARACTER(LEN=160) :: note
         LOGICAL :: valid        ! If formula calculation was successful (Dn > 0)
     END TYPE FormulaResult
 
@@ -198,6 +199,11 @@ PROGRAM RockSlopeCalculator
         REAL(dp) :: thickness
         REAL(dp) :: packing_density ! rocks/100m2
         
+        LOGICAL :: used_custom_interpolation
+        CHARACTER(LEN=8) :: custom_family
+        REAL(dp) :: custom_ratio_nul_nll
+        CHARACTER(LEN=160) :: custom_ratio_note
+        
         LOGICAL :: design_valid ! If a valid grading/design was found
     END TYPE LayerDesign
 
@@ -208,6 +214,7 @@ PROGRAM RockSlopeCalculator
         TYPE(FormulaResult), ALLOCATABLE :: comparison(:)
         TYPE(FormulaResult) :: recommended
         CHARACTER(LEN=300), ALLOCATABLE :: justification(:)
+        CHARACTER(LEN=200) :: manual_override_message
         TYPE(LayerDesign) :: armor_layer
         TYPE(LayerDesign) :: underlayer
     END TYPE FullReport
@@ -215,7 +222,7 @@ PROGRAM RockSlopeCalculator
     ! ----------------------------------------------------------------------
     ! VARIABLES
     ! ----------------------------------------------------------------------
-    TYPE(GradingDef) :: standard_gradings(16)
+    TYPE(GradingDef) :: standard_gradings(17)
     TYPE(Inputs) :: user_inputs
     TYPE(FullReport) :: final_report
     INTEGER :: num_args
@@ -228,29 +235,31 @@ PROGRAM RockSlopeCalculator
     ! ----------------------------------------------------------------------
     
     ! Initialize EN 13383 Database 
-    ! Logic: NLL and NUL taken from Category Name for LMA/HMA.
+    ! Logic: NLL and NUL taken from the revised CP grading limits where applicable,
+    ! and from the category name for LMA/HMA.
     ! M50 calculated as 0.5 * (NLL + NUL).
     
-    standard_gradings(1) = GradingDef("CP 45/125", 0.4_dp, 1.2_dp, 0.8_dp)
-    standard_gradings(2) = GradingDef("CP 63/180", 1.2_dp, 3.8_dp, 2.5_dp)
-    standard_gradings(3) = GradingDef("CP 90/250", 3.1_dp, 9.3_dp, 6.2_dp)
-    standard_gradings(4) = GradingDef("CP 45/180", 0.4_dp, 1.2_dp, 0.8_dp)
-    standard_gradings(5) = GradingDef("CP 90/180", 2.1_dp, 2.8_dp, 2.45_dp)
+    standard_gradings(1) = GradingDef("CP32/90", 0.868_dp, 19.319_dp, 10.0935_dp)
+    standard_gradings(2) = GradingDef("CP45/125", 2.415_dp, 51.758_dp, 27.0865_dp)
+    standard_gradings(3) = GradingDef("CP63/180", 6.626_dp, 154.548_dp, 80.587_dp)
+    standard_gradings(4) = GradingDef("CP90/250", 19.319_dp, 414.063_dp, 216.691_dp)
+    standard_gradings(5) = GradingDef("CP45/180", 2.415_dp, 154.548_dp, 78.4815_dp)
+    standard_gradings(6) = GradingDef("CP90/180", 19.319_dp, 154.548_dp, 86.9335_dp)
     
     ! Light Mass Armour (LMA) - NLL/NUL from name
-    standard_gradings(6) = GradingDef("LMA 5-40", 5.0_dp, 40.0_dp, 22.5_dp)
-    standard_gradings(7) = GradingDef("LMA 10-60", 10.0_dp, 60.0_dp, 35.0_dp)
-    standard_gradings(8) = GradingDef("LMA 15-120", 15.0_dp, 120.0_dp, 67.5_dp)
-    standard_gradings(9) = GradingDef("LMA 40-200", 40.0_dp, 200.0_dp, 120.0_dp)
-    standard_gradings(10) = GradingDef("LMA 60-300", 60.0_dp, 300.0_dp, 180.0_dp)
-    standard_gradings(11) = GradingDef("LMA 15-300", 15.0_dp, 300.0_dp, 157.5_dp)
+    standard_gradings(7) = GradingDef("LMA 5-40", 5.0_dp, 40.0_dp, 22.5_dp)
+    standard_gradings(8) = GradingDef("LMA 10-60", 10.0_dp, 60.0_dp, 35.0_dp)
+    standard_gradings(9) = GradingDef("LMA 15-120", 15.0_dp, 120.0_dp, 67.5_dp)
+    standard_gradings(10) = GradingDef("LMA 40-200", 40.0_dp, 200.0_dp, 120.0_dp)
+    standard_gradings(11) = GradingDef("LMA 60-300", 60.0_dp, 300.0_dp, 180.0_dp)
+    standard_gradings(12) = GradingDef("LMA 15-300", 15.0_dp, 300.0_dp, 157.5_dp)
     
     ! Heavy Mass Armour (HMA) - NLL/NUL from name
-    standard_gradings(12) = GradingDef("HMA 300-1000", 300.0_dp, 1000.0_dp, 650.0_dp)
-    standard_gradings(13) = GradingDef("HMA 1000-3000", 1000.0_dp, 3000.0_dp, 2000.0_dp)
-    standard_gradings(14) = GradingDef("HMA 3000-6000", 3000.0_dp, 6000.0_dp, 4500.0_dp)
-    standard_gradings(15) = GradingDef("HMA 6000-10000", 6000.0_dp, 10000.0_dp, 8000.0_dp)
-    standard_gradings(16) = GradingDef("HMA 10000-15000", 10000.0_dp, 15000.0_dp, 12500.0_dp)
+    standard_gradings(13) = GradingDef("HMA 300-1000", 300.0_dp, 1000.0_dp, 650.0_dp)
+    standard_gradings(14) = GradingDef("HMA 1000-3000", 1000.0_dp, 3000.0_dp, 2000.0_dp)
+    standard_gradings(15) = GradingDef("HMA 3000-6000", 3000.0_dp, 6000.0_dp, 4500.0_dp)
+    standard_gradings(16) = GradingDef("HMA 6000-10000", 6000.0_dp, 10000.0_dp, 8000.0_dp)
+    standard_gradings(17) = GradingDef("HMA 10000-15000", 10000.0_dp, 15000.0_dp, 12500.0_dp)
 
     ! Sort by M50 for selection logic
     CALL sort_gradings(standard_gradings)
@@ -269,6 +278,7 @@ PROGRAM RockSlopeCalculator
     user_inputs%duration = 6.0_dp
     user_inputs%use_en13383 = .TRUE.
     user_inputs%manual_selection = .FALSE.
+    user_inputs%custom_family = 'AUTO'
 
     ! ==============================================================================
     ! MAIN EXECUTION BLOCK
@@ -301,6 +311,18 @@ PROGRAM RockSlopeCalculator
                 user_inputs%use_en13383 = .FALSE.
             END IF
         END IF
+
+        IF (num_args >= 12) THEN
+            CALL GET_COMMAND_ARGUMENT(12, arg_val)
+            CALL to_upper(arg_val)
+            arg_val = ADJUSTL(arg_val)
+            IF (TRIM(arg_val) == 'HMA' .OR. TRIM(arg_val) == 'LMA' .OR. TRIM(arg_val) == 'CP' .OR. &
+                TRIM(arg_val) == 'AUTO') THEN
+                user_inputs%custom_family = TRIM(arg_val)
+            ELSE
+                user_inputs%custom_family = 'AUTO'
+            END IF
+        END IF
     ELSE
         ! Interactive Mode
         PRINT *, ""
@@ -322,6 +344,14 @@ PROGRAM RockSlopeCalculator
         CALL get_param("Storm Duration [hours]", user_inputs%duration)
         
         CALL get_bool_param("Use EN13383 Standard Grading? (True/False)", user_inputs%use_en13383)
+        IF (.NOT. user_inputs%use_en13383) THEN
+            CALL get_string_param("Custom grading family [AUTO/HMA/LMA/CP]", user_inputs%custom_family)
+            CALL to_upper(user_inputs%custom_family)
+            IF (TRIM(user_inputs%custom_family) /= 'HMA' .AND. TRIM(user_inputs%custom_family) /= 'LMA' .AND. &
+                TRIM(user_inputs%custom_family) /= 'CP' .AND. TRIM(user_inputs%custom_family) /= 'AUTO') THEN
+                user_inputs%custom_family = 'AUTO'
+            END IF
+        END IF
         CALL get_bool_param("Choose stability formula instead of automatic (True/False)", user_inputs%manual_selection)
     END IF
 
@@ -356,6 +386,16 @@ CONTAINS
             END IF
         END DO
     END SUBROUTINE to_lower
+
+    SUBROUTINE to_upper(str)
+        CHARACTER(LEN=*), INTENT(INOUT) :: str
+        INTEGER :: i
+        DO i = 1, LEN(str)
+            IF (IACHAR(str(i:i)) >= IACHAR('a') .AND. IACHAR(str(i:i)) <= IACHAR('z')) THEN
+                str(i:i) = ACHAR(IACHAR(str(i:i)) - 32)
+            END IF
+        END DO
+    END SUBROUTINE to_upper
 
     SUBROUTINE get_param(prompt, val)
         CHARACTER(LEN=*), INTENT(IN) :: prompt
@@ -400,6 +440,208 @@ CONTAINS
             END IF
         END IF
     END SUBROUTINE get_bool_param
+
+    SUBROUTINE get_string_param(prompt, val)
+        CHARACTER(LEN=*), INTENT(IN) :: prompt
+        CHARACTER(LEN=*), INTENT(INOUT) :: val
+        CHARACTER(LEN=100) :: buffer_local
+
+        WRITE(*, '(A, " [default: ", A, "]: ")', ADVANCE='NO') prompt, TRIM(val)
+        READ(*, '(A)') buffer_local
+
+        IF (LEN_TRIM(buffer_local) > 0) THEN
+            val = ADJUSTL(buffer_local)
+        END IF
+    END SUBROUTINE get_string_param
+
+    FUNCTION pad_right(str, width) RESULT(out)
+        CHARACTER(LEN=*), INTENT(IN) :: str
+        INTEGER, INTENT(IN) :: width
+        CHARACTER(LEN=width) :: out
+        INTEGER :: n
+        out = " "
+        n = MIN(LEN_TRIM(str), width)
+        IF (n > 0) out(1:n) = str(1:n)
+    END FUNCTION pad_right
+
+    FUNCTION real_str(val, prec) RESULT(out)
+        REAL(dp), INTENT(IN) :: val
+        INTEGER, INTENT(IN) :: prec
+        CHARACTER(LEN=:), ALLOCATABLE :: out
+        CHARACTER(LEN=64) :: tmp
+        SELECT CASE (prec)
+        CASE (0)
+            WRITE(tmp, '(F12.0)') val
+        CASE (1)
+            WRITE(tmp, '(F12.1)') val
+        CASE (2)
+            WRITE(tmp, '(F12.2)') val
+        CASE (3)
+            WRITE(tmp, '(F12.3)') val
+        CASE (4)
+            WRITE(tmp, '(F12.4)') val
+        CASE (5)
+            WRITE(tmp, '(F12.5)') val
+        CASE DEFAULT
+            WRITE(tmp, '(ES16.8)') val
+        END SELECT
+        out = TRIM(ADJUSTL(tmp))
+    END FUNCTION real_str
+
+    FUNCTION int_str(i) RESULT(out)
+        INTEGER, INTENT(IN) :: i
+        CHARACTER(LEN=:), ALLOCATABLE :: out
+        CHARACTER(LEN=32) :: tmp
+        WRITE(tmp, '(I0)') i
+        out = TRIM(tmp)
+    END FUNCTION int_str
+
+    FUNCTION fmt_row35(label, val, unit) RESULT(out)
+        CHARACTER(LEN=*), INTENT(IN) :: label, val, unit
+        CHARACTER(LEN=:), ALLOCATABLE :: out
+        out = pad_right(label, 35) // ' | ' // pad_right(val, 10) // ' | ' // unit
+    END FUNCTION fmt_row35
+
+    FUNCTION fmt_row40(label, val, unit) RESULT(out)
+        CHARACTER(LEN=*), INTENT(IN) :: label, val, unit
+        CHARACTER(LEN=:), ALLOCATABLE :: out
+        out = pad_right(label, 40) // ' | ' // pad_right(val, 10) // ' | ' // unit
+    END FUNCTION fmt_row40
+
+    FUNCTION fmt_formula_row(name, ns, dn, mass, kd, note) RESULT(out)
+        CHARACTER(LEN=*), INTENT(IN) :: name, note
+        REAL(dp), INTENT(IN) :: ns, dn, kd
+        INTEGER, INTENT(IN) :: mass
+        CHARACTER(LEN=:), ALLOCATABLE :: out
+        out = pad_right(name, 30) // ' | ' // pad_right(real_str(ns, 4), 8) // ' | ' // &
+              pad_right(real_str(dn, 3), 10) // ' | ' // pad_right(int_str(mass), 10) // ' | ' // &
+              pad_right(real_str(kd, 2), 8) // ' | ' // TRIM(note)
+    END FUNCTION fmt_formula_row
+
+    FUNCTION fmt_detail_line(label, val) RESULT(out)
+        CHARACTER(LEN=*), INTENT(IN) :: label, val
+        CHARACTER(LEN=:), ALLOCATABLE :: out
+        out = '   ' // pad_right(label, 36) // ': ' // TRIM(val)
+    END FUNCTION fmt_detail_line
+
+    SUBROUTINE emit_line(unit_no, line)
+        INTEGER, INTENT(IN) :: unit_no
+        CHARACTER(LEN=*), INTENT(IN) :: line
+        WRITE(unit_no, '(A)') TRIM(line)
+        WRITE(*, '(A)') TRIM(line)
+    END SUBROUTINE emit_line
+
+    FUNCTION grading_family(name) RESULT(out)
+        CHARACTER(LEN=*), INTENT(IN) :: name
+        CHARACTER(LEN=8) :: out
+        CHARACTER(LEN=64) :: local
+        local = ADJUSTL(name)
+        out = 'UNKNOWN'
+        IF (INDEX(local, 'HMA ') == 1) THEN
+            out = 'HMA'
+        ELSEIF (INDEX(local, 'LMA ') == 1) THEN
+            out = 'LMA'
+        ELSEIF (INDEX(local, 'CP') == 1) THEN
+            out = 'CP'
+        END IF
+    END FUNCTION grading_family
+
+    FUNCTION select_custom_family(target_mass) RESULT(out)
+        REAL(dp), INTENT(IN) :: target_mass
+        CHARACTER(LEN=8) :: out
+        REAL(dp) :: safe_mass, best_score, score
+        CHARACTER(LEN=8) :: fam
+        INTEGER :: i
+
+        safe_mass = MAX(target_mass, 1.0E-9_dp)
+        best_score = HUGE(1.0_dp)
+        out = 'LMA'
+
+        DO i = 1, SIZE(standard_gradings)
+            fam = grading_family(standard_gradings(i)%name)
+            IF (TRIM(fam) /= 'UNKNOWN') THEN
+                score = ABS(LOG(safe_mass) - LOG(MAX(standard_gradings(i)%M50, 1.0E-9_dp)))
+                IF (TRIM(fam) == 'CP') score = score + 0.08_dp
+                IF (score < best_score) THEN
+                    best_score = score
+                    out = fam
+                END IF
+            END IF
+        END DO
+    END FUNCTION select_custom_family
+
+    FUNCTION interpolate_family_ratio(target_mass, family, note) RESULT(ratio)
+        REAL(dp), INTENT(IN) :: target_mass
+        CHARACTER(LEN=*), INTENT(IN) :: family
+        CHARACTER(LEN=*), INTENT(OUT) :: note
+        REAL(dp) :: ratio
+
+        INTEGER, PARAMETER :: max_family = 32
+        REAL(dp) :: x(max_family), y(max_family), xt, t, tmpx, tmpy
+        CHARACTER(LEN=64) :: names(max_family), tmpname
+        CHARACTER(LEN=8) :: fam
+        INTEGER :: i, j, n
+
+        note = ''
+        n = 0
+        DO i = 1, SIZE(standard_gradings)
+            fam = grading_family(standard_gradings(i)%name)
+            IF (TRIM(fam) == TRIM(family)) THEN
+                n = n + 1
+                x(n) = LOG(MAX(standard_gradings(i)%M50, 1.0E-9_dp))
+                y(n) = LOG(MAX(standard_gradings(i)%nul_kg / standard_gradings(i)%nll_kg, 1.0_dp + 1.0E-9_dp))
+                names(n) = standard_gradings(i)%name
+            END IF
+        END DO
+
+        IF (n <= 0) THEN
+            ratio = 3.0_dp
+            note = 'fallback ratio R=NUL/NLL = 3.0 (no family data)'
+            RETURN
+        END IF
+
+        DO i = 1, n - 1
+            DO j = i + 1, n
+                IF (x(i) > x(j)) THEN
+                    tmpx = x(i); x(i) = x(j); x(j) = tmpx
+                    tmpy = y(i); y(i) = y(j); y(j) = tmpy
+                    tmpname = names(i); names(i) = names(j); names(j) = tmpname
+                END IF
+            END DO
+        END DO
+
+        xt = LOG(MAX(target_mass, 1.0E-9_dp))
+
+        IF (n == 1) THEN
+            ratio = EXP(y(1))
+            note = TRIM(family) // ' family single-point ratio used'
+            RETURN
+        END IF
+
+        IF (xt <= x(1)) THEN
+            ratio = EXP(y(1))
+            note = TRIM(family) // ' family ratio clamped to lower-end class ' // TRIM(names(1))
+            RETURN
+        END IF
+
+        IF (xt >= x(n)) THEN
+            ratio = EXP(y(n))
+            note = TRIM(family) // ' family ratio clamped to upper-end class ' // TRIM(names(n))
+            RETURN
+        END IF
+
+        DO i = 1, n - 1
+            IF (xt >= x(i) .AND. xt <= x(i + 1)) THEN
+                t = (xt - x(i)) / (x(i + 1) - x(i))
+                ratio = EXP(y(i) + t * (y(i + 1) - y(i)))
+                note = TRIM(family) // ' family ratio interpolated between ' // TRIM(names(i)) // ' and ' // TRIM(names(i + 1))
+                RETURN
+            END IF
+        END DO
+
+        ratio = EXP(y(n))
+        note = TRIM(family) // ' family ratio fallback to upper-end class ' // TRIM(names(n))
+    END FUNCTION interpolate_family_ratio
 
     ! --- Wave Mechanics ---
 
@@ -788,119 +1030,105 @@ CONTAINS
         LOGICAL, INTENT(IN) :: is_armor
         TYPE(Inputs), INTENT(IN) :: in
         TYPE(LayerDesign) :: ld
-        
-        REAL(dp) :: gamma_r, w_min, w_max, diff, min_diff
-        REAL(dp) :: final_w_mean, final_w_min, final_w_max, final_M50
+
+        REAL(dp) :: gamma_r, diff, min_diff, porosity
+        REAL(dp) :: final_w_min, final_w_max, final_M50
+        REAL(dp) :: ratio_nul_nll, nll_kg, nul_kg
         CHARACTER(LEN=64) :: selected_name
+        CHARACTER(LEN=8) :: family
+        CHARACTER(LEN=160) :: ratio_note
         LOGICAL :: found
         INTEGER :: i
-        REAL(dp) :: x_val, a_min, b_min, c_min, a_max, b_max, c_max, porosity
 
         IF (is_armor) THEN
-            ld%layer_name = "Primary Armor"
+            ld%layer_name = 'Primary Armor'
         ELSE
-            ld%layer_name = "Underlayer"
+            ld%layer_name = 'Underlayer'
         END IF
-        
+
         ld%target_M50_kg = target_mass
         ld%target_Dn_m = target_dn
         ld%target_W_kN = target_mass * g / 1000.0_dp
-        
+        ld%used_custom_interpolation = .FALSE.
+        ld%custom_family = ''
+        ld%custom_ratio_nul_nll = 0.0_dp
+        ld%custom_ratio_note = ''
+
         gamma_r = in%rho_r * g / 1000.0_dp
-        
+
         ld%design_valid = .FALSE.
         IF (in%use_en13383) THEN
-            selected_name = ""
+            selected_name = ''
             found = .FALSE.
-            
-            ! Selection Rule: NLL < Target M50 < NUL
-            ! Tie-breaker: Choose class with smaller grading width (NUL - NLL)
-            min_diff = HUGE(1.0_dp) ! Using min_diff variable to track range width
-            
+            min_diff = HUGE(1.0_dp)
+
             DO i = 1, SIZE(standard_gradings)
-                ! Check strict containment
                 IF (target_mass > standard_gradings(i)%nll_kg .AND. &
                     target_mass < standard_gradings(i)%nul_kg) THEN
-                    
+
                     diff = standard_gradings(i)%nul_kg - standard_gradings(i)%nll_kg
-                    
-                    ! Update if this is the first match OR if this range is tighter (smaller width)
                     IF (diff < min_diff) THEN
                         min_diff = diff
                         selected_name = standard_gradings(i)%name
                         final_M50 = standard_gradings(i)%M50
-                        
-                        ! Store Nominal Limits (kg) temporarily in w_min/w_max slots
-                        ! We will convert to kN for struct storage
                         final_w_min = standard_gradings(i)%nll_kg * g / 1000.0_dp
                         final_w_max = standard_gradings(i)%nul_kg * g / 1000.0_dp
                         found = .TRUE.
                     END IF
                 END IF
             END DO
-            
+
             IF (found) THEN
                 ld%grading_name = selected_name
                 ld%m_mean_kg = final_M50
-                
-                ! Store weights in kN
                 ld%w_min_kn = final_w_min
                 ld%w_max_kn = final_w_max
-                ! Store masses in kg (NLL/NUL)
                 ld%w_min_kg = final_w_min * 1000.0_dp / g
                 ld%w_max_kg = final_w_max * 1000.0_dp / g
-                
                 ld%w_mean_kn = ld%m_mean_kg * g / 1000.0_dp
                 ld%actual_dn = (ld%w_mean_kn / gamma_r)**(1.0_dp/3.0_dp)
                 ld%design_valid = .TRUE.
             ELSE
-                ld%grading_name = "No Standard Fit (Target outside NLL-NUL)"
+                ld%grading_name = 'No Standard Fit (Target outside NLL-NUL)'
                 ld%design_valid = .FALSE.
             END IF
         END IF
-        
-    IF (.NOT. in%use_en13383 .OR. .NOT. ld%design_valid) THEN
+
+        IF (.NOT. in%use_en13383 .OR. .NOT. ld%design_valid) THEN
             IF (is_armor) THEN
-                ld%grading_name = "Custom Grading"
+                ld%grading_name = 'Custom Interpolated Grading'
             ELSE
-                ld%grading_name = "Custom Grading Underlayer"
+                ld%grading_name = 'Custom Interpolated Grading Underlayer'
             END IF
-            
-            ! --- CUSTOM POWER LAW CALCULATION ---
-            ! Used when standard grading is disabled.
-            ! Using 'x' as Theoretical Required M50 (in kg)
-            x_val = target_mass
-            
-            ! Grading Min Params (Formula Coefficients)
-            a_min = 1.056832014477894E+00_dp
-            b_min = 1.482769823574055E+00_dp
-            c_min = -2.476127406338004E-01_dp
-            
-            ! Calculate Mass Limit (kg) first, then convert to Weight (kN)
-            ! Formula: Weight_Min_kN = (Target_Mass_kg * Factor) * g / 1000
-            ld%w_min_kn = (target_mass * (a_min / (1.0_dp + (x_val / b_min)**c_min))) * g / 1000.0_dp
-            
-            ! Grading Max Params (Formula Coefficients)
-            a_max = 1.713085676568561E+00_dp
-            b_max = 2.460481255856126E+05_dp
-            c_max = 1.327263214034671E-01_dp
-            
-            ! Calculate Mass Limit (kg) first, then convert to Weight (kN)
-            ld%w_max_kn = (target_mass * (a_max / (1.0_dp + (x_val / b_max)**c_max))) * g / 1000.0_dp
-            
-            ! Design values based on target
+
+            family = in%custom_family
+            CALL to_upper(family)
+            family = ADJUSTL(family)
+            IF (TRIM(family) /= 'HMA' .AND. TRIM(family) /= 'LMA' .AND. TRIM(family) /= 'CP') THEN
+                family = select_custom_family(ld%target_M50_kg)
+            END IF
+
+            ratio_nul_nll = interpolate_family_ratio(ld%target_M50_kg, TRIM(family), ratio_note)
+            ratio_nul_nll = MAX(ratio_nul_nll, 1.01_dp)
+
+            nll_kg = (2.0_dp * target_mass) / (1.0_dp + ratio_nul_nll)
+            nul_kg = ratio_nul_nll * nll_kg
+
+            ld%used_custom_interpolation = .TRUE.
+            ld%custom_family = family
+            ld%custom_ratio_nul_nll = ratio_nul_nll
+            ld%custom_ratio_note = ratio_note
+
+            ld%w_min_kg = nll_kg
+            ld%w_max_kg = nul_kg
+            ld%w_min_kn = nll_kg * g / 1000.0_dp
+            ld%w_max_kn = nul_kg * g / 1000.0_dp
             ld%w_mean_kn = ld%target_W_kN
             ld%m_mean_kg = target_mass
             ld%actual_dn = target_dn
-            
-            ! Back-calculate kg for display
-            ld%w_min_kg = (ld%w_min_kn * 1000.0_dp) / g
-            ld%w_max_kg = (ld%w_max_kn * 1000.0_dp) / g
-            
             ld%design_valid = .TRUE.
         END IF
-        
-        ! Geometry
+
         ld%thickness = 2.0_dp * 1.0_dp * ld%actual_dn
         porosity = 0.30_dp
         ld%packing_density = 100.0_dp * 2.0_dp * 1.0_dp * (1.0_dp - porosity) / (ld%actual_dn**2)
@@ -954,9 +1182,13 @@ CONTAINS
         TYPE(DerivedParams) :: dp_local
         TYPE(Hydraulics) :: h
         TYPE(FormulaResult) :: vdm, vg_mod, vg_simp, es, mod_vg, mod_es
+        INTEGER :: i, j, iostat, n_valid, choice
+        INTEGER :: valid_idx(8)
         CHARACTER(LEN=100) :: str_buf, str_buf2
+        CHARACTER(LEN=64) :: uname
         
         report%inputs = in
+        report%manual_override_message = ""
         
         ! Derived Params
         dp_local%cot_alpha = in%slope_m
@@ -1061,8 +1293,8 @@ CONTAINS
             CALL add_justification(report, "   It provides the most theoretically consistent result for non-depth-limited waves.")
             
             IF (es%valid .AND. vdm%valid) THEN
-                 WRITE(str_buf, '(F0.3)') es%Dn50
-                 WRITE(str_buf2, '(F0.3)') ABS(vdm%Dn50 - es%Dn50)
+                 str_buf = real_str(es%Dn50, 3)
+                 str_buf2 = real_str(ABS(vdm%Dn50 - es%Dn50), 3)
                  CALL add_justification(report, "   *Verification:* Etemad-Shahidi yields Dn50 = " // TRIM(str_buf) // &
                     "m (Difference: " // TRIM(str_buf2) // "m).")
             END IF
@@ -1215,37 +1447,34 @@ CONTAINS
         ! Interactive Manual Selection Logic
         IF (in%manual_selection) THEN
             PRINT *, ""
-            PRINT *, "================================================================================"
+            PRINT *, REPEAT("=", 80)
             PRINT *, "   MANUAL SELECTION MODE"
-            PRINT *, "================================================================================"
-            
+            PRINT *, REPEAT("=", 80)
+
+            n_valid = 0
             DO i = 1, SIZE(report%comparison)
                 IF (report%comparison(i)%valid) THEN
-                    WRITE(*, '(A, I0, A, A)') "   [", i, "] ", TRIM(report%comparison(i)%name)
+                    n_valid = n_valid + 1
+                    valid_idx(n_valid) = i
+                    WRITE(*, '(A, I0, A, A)') "   [", n_valid, "] ", TRIM(report%comparison(i)%name)
                 END IF
             END DO
-            
-            PRINT *, ""
-            WRITE(*, '(A)', ADVANCE='NO') "Enter the number of your preferred formula: "
-            READ(*, '(A)') str_buf
-            
-            READ(str_buf, *, IOSTAT=iostat) i
-            IF (iostat == 0 .AND. i >= 1 .AND. i <= SIZE(report%comparison)) THEN
-                IF (report%comparison(i)%valid) THEN
-                    report%recommended = report%comparison(i)
-                    str_buf = ""
-                    str_buf = CHAR(10) // "[MANUAL OVERRIDE] User switched selection to: " // TRIM(report%recommended%name)
-                    CALL to_lower(str_buf) ! Note: to_upper implementation omitted, just printing as is or lowercase is acceptable fallback or adding to_upper helper.
-                    ! Just using name as is for CLI consistency
-                    str_buf = CHAR(10) // "[MANUAL OVERRIDE] User switched selection to: " // TRIM(report%recommended%name)
-                    PRINT '(A)', TRIM(str_buf)
-                    CALL add_justification(report, TRIM(str_buf))
+
+            DO
+                PRINT *, ""
+                WRITE(*, '(A, I0, A)', ADVANCE='NO') "Enter the number of your preferred formula (1-", n_valid, "): "
+                READ(*, '(A)') str_buf
+                READ(str_buf, *, IOSTAT=iostat) choice
+                IF (iostat == 0 .AND. choice >= 1 .AND. choice <= n_valid) THEN
+                    report%recommended = report%comparison(valid_idx(choice))
+                    uname = report%recommended%name
+                    CALL to_upper(uname)
+                    report%manual_override_message = "[MANUAL OVERRIDE] User switched selection to: " // TRIM(uname)
+                    EXIT
                 ELSE
-                    PRINT *, "Invalid selection (formula not valid). Using automatic."
+                    PRINT *, "Invalid selection. Try again."
                 END IF
-            ELSE
-                PRINT *, "Invalid selection. Using automatic."
-            END IF
+            END DO
         END IF
 
         ! Calculate Layers
@@ -1258,183 +1487,186 @@ CONTAINS
     SUBROUTINE generate_report_file(report, filepath)
         TYPE(FullReport), INTENT(IN) :: report
         CHARACTER(LEN=*), INTENT(IN) :: filepath
-        
-        INTEGER :: u, iostatus_val, i
-        CHARACTER(LEN=30) :: name_field
-        CHARACTER(LEN=120) :: separator
-        CHARACTER(LEN=120) :: separator_long
+
+        INTEGER :: u, iostatus_val, i, mass_i
+        CHARACTER(LEN=:), ALLOCATABLE :: line, detail_val
+        CHARACTER(LEN=115) :: separator_long
+        CHARACTER(LEN=95) :: separator, eqline
         TYPE(FormulaResult) :: res
-        REAL(dp) :: mass
-        REAL(dp) :: nll_val, nul_val, ell_val, eul_val, rep_m50
-        
-        separator = "-----------------------------------------------------------------------------------------------"
-        separator_long = "--------------------------------------------------------------------------------" // &
-                         "-----------------------------------"
-        
+        REAL(dp) :: mass, nll_val, nul_val, ell_val, eul_val, rep_m50
+
+        separator = REPEAT('-', 95)
+        separator_long = REPEAT('-', 115)
+        eqline = REPEAT('=', 95)
+
         OPEN(NEWUNIT=u, FILE=filepath, STATUS='REPLACE', ACTION='WRITE', IOSTAT=iostatus_val)
         IF (iostatus_val /= 0) THEN
-            PRINT *, "Error saving file."
+            PRINT *, 'Error writing file.'
             RETURN
         END IF
-        
-        WRITE(u, '(A)') "ROCK SLOPE STABILITY CALCULATOR"
-        WRITE(u, '(A)') ""
-        WRITE(u, '(A)') "==============================================================================================="
-        WRITE(u, '(A)') "   1. DESIGN INPUT PARAMETERS"
-        WRITE(u, '(A)') "==============================================================================================="
-        WRITE(u, '(A35, " | ", A10, " | ", A)') "PARAMETER", "VALUE", "UNIT"
-        WRITE(u, '(A)') TRIM(separator)
-        WRITE(u, '(A35, " | ", F10.2, " | ", A)') "Significant Wave Height (Hs)", report%inputs%Hs, "m"
-        WRITE(u, '(A35, " | ", F10.2, " | ", A)') "Spectral Period (Tm-1,0)", report%inputs%Tm10, "s"
-        WRITE(u, '(A35, " | ", F10.2, " | ", A)') "Water Depth (h_toe)", report%inputs%h_toe, "m"
-        WRITE(u, '(A35, " | 1:", F8.2, " | ", A)')  "Structure Slope", report%inputs%slope_m, "(V:H)"
-        WRITE(u, '(A35, " | 1:", F8.2, " | ", A)')  "Foreshore Slope", report%inputs%foreshore_m, "(V:H)"
-        WRITE(u, '(A35, " | ", F10.2, " | ", A)') "Permeability (P_notional)", report%inputs%P, "(-)"
-        WRITE(u, '(A35, " | ", F10.2, " | ", A)') "Physical Permeability (Cp)", report%derived%Cp, "(-)"
-        WRITE(u, '(A35, " | ", F10.1, " | ", A)') "Damage Level (S)", report%inputs%Sd, "(-)"
-        WRITE(u, '(A)') TRIM(separator)
-        WRITE(u, '(A)') ""
-        
-        WRITE(u, '(A)') "==============================================================================================="
-        WRITE(u, '(A)') "   2. CALCULATED HYDRAULIC PARAMETERS"
-        WRITE(u, '(A)') "==============================================================================================="
-        WRITE(u, '(A40, " | ", A10, " | ", A)') "PARAMETER", "VALUE", "UNIT"
-        WRITE(u, '(A)') TRIM(separator)
-        WRITE(u, '(A40, " | ", F10.2, " | ", A)') "Deep Water Wavelength (L0)", report%hydro%L0, "m"
-        WRITE(u, '(A40, " | ", F10.2, " | ", A)') "Wavelength at Toe (L_toe)", report%hydro%L_toe, "m"
-        WRITE(u, '(A40, " | ", F10.2, " | ", A)') "Wave Celerity at Toe (C)", report%hydro%C, "m/s"
-        WRITE(u, '(A40, " | ", F10.2, " | ", A)') "Group Celerity at Toe (Cg)", report%hydro%Cg, "m/s"
-        WRITE(u, '(A40, " | ", F10.5, " | ", A)') "Deep Water Steepness (s_m-1,0)", report%hydro%s_m10, "(-)"
-        WRITE(u, '(A40, " | ", F10.5, " | ", A)') "Local Wave Steepness (s_local)", report%hydro%s_local, "(-)"
-        WRITE(u, '(A40, " | ", F10.2, " | ", A)') "Surf Similarity (xi_m-1,0)", report%hydro%xi_m10, "(-)"
-        WRITE(u, '(A40, " | ", A10, " | ", A)')   "Breaker Type (Visual/Physical)", report%hydro%breaker_type, "(-)"
-        WRITE(u, '(A40, " | ", F10.2, " | ", A)') "Relative Depth (h/Hm0)", report%hydro%rel_depth, "(-)"
-        WRITE(u, '(A40, " | ", F10.3, " | ", A)') "Relative Depth (h/L0)", &
-            report%hydro%rel_depth * report%hydro%s_m10, "(-)"
-        WRITE(u, '(A40, " | ", A40)')             "Hydraulic Zone", report%hydro%zone_desc
-        WRITE(u, '(A)') TRIM(separator)
-        WRITE(u, '(A)') ""
-        
-        WRITE(u, '(A)') "==============================================================================================="
-        WRITE(u, '(A)') "   3. FORMULA SELECTION & JUSTIFICATION"
-        WRITE(u, '(A)') "==============================================================================================="
-        WRITE(u, '(A)') "COMPARISON OF RESULTS:"
-        WRITE(u, '(A30, " | ", A8, " | ", A10, " | ", A10, " | ", A8, " | ", A)') &
-            "Method", "Ns (-)", "Dn50 (m)", "M50 (kg)", "Kd_eq (-)", "NOTES"
-        WRITE(u, '(A)') TRIM(separator_long)
-        
+
+        CALL emit_line(u, 'ROCK SLOPE STABILITY CALCULATOR')
+        CALL emit_line(u, '')
+        CALL emit_line(u, eqline)
+        CALL emit_line(u, '   1. DESIGN INPUT PARAMETERS')
+        CALL emit_line(u, eqline)
+        CALL emit_line(u, fmt_row35('PARAMETER', 'VALUE', 'UNIT'))
+        CALL emit_line(u, separator)
+        CALL emit_line(u, fmt_row35('Significant Wave Height (Hs)', real_str(report%inputs%Hs, 2), 'm'))
+        CALL emit_line(u, fmt_row35('Spectral Period (Tm-1,0)', real_str(report%inputs%Tm10, 2), 's'))
+        CALL emit_line(u, fmt_row35('Water Depth (h_toe)', real_str(report%inputs%h_toe, 2), 'm'))
+        CALL emit_line(u, fmt_row35('Structure Slope', '1:' // real_str(report%inputs%slope_m, 2), '(V:H)'))
+        CALL emit_line(u, fmt_row35('Foreshore Slope', '1:' // real_str(report%inputs%foreshore_m, 2), '(V:H)'))
+        CALL emit_line(u, fmt_row35('Permeability (P_notional)', real_str(report%inputs%P, 2), '(-)'))
+        CALL emit_line(u, fmt_row35('Physical Permeability (Cp)', real_str(report%derived%Cp, 2), '(-)'))
+        CALL emit_line(u, fmt_row35('Damage Level (S)', real_str(report%inputs%Sd, 1), '(-)'))
+        CALL emit_line(u, separator)
+        CALL emit_line(u, '')
+
+        CALL emit_line(u, eqline)
+        CALL emit_line(u, '   2. CALCULATED HYDRAULIC PARAMETERS')
+        CALL emit_line(u, eqline)
+        CALL emit_line(u, fmt_row40('PARAMETER', 'VALUE', 'UNIT'))
+        CALL emit_line(u, separator)
+        CALL emit_line(u, fmt_row40('Deep Water Wavelength (L0)', real_str(report%hydro%L0, 2), 'm'))
+        CALL emit_line(u, fmt_row40('Wavelength at Toe (L_toe)', real_str(report%hydro%L_toe, 2), 'm'))
+        CALL emit_line(u, fmt_row40('Wave Celerity at Toe (C)', real_str(report%hydro%C, 2), 'm/s'))
+        CALL emit_line(u, fmt_row40('Group Celerity at Toe (Cg)', real_str(report%hydro%Cg, 2), 'm/s'))
+        CALL emit_line(u, fmt_row40('Deep Water Steepness (s_m-1,0)', real_str(report%hydro%s_m10, 5), '(-)'))
+        CALL emit_line(u, fmt_row40('Local Wave Steepness (s_local)', real_str(report%hydro%s_local, 5), '(-)'))
+        CALL emit_line(u, fmt_row40('Surf Similarity (xi_m-1,0)', real_str(report%hydro%xi_m10, 2), '(-)'))
+        line = pad_right('Breaker Type (Visual/Physical)', 40) // ' | ' // TRIM(report%hydro%breaker_type) // ' | (-)'
+        CALL emit_line(u, line)
+        CALL emit_line(u, fmt_row40('Relative Depth (h/Hm0)', real_str(report%hydro%rel_depth, 2), '(-)'))
+        CALL emit_line(u, fmt_row40('Relative Depth (h/L0)', real_str(report%hydro%rel_depth * report%hydro%s_m10, 3), '(-)'))
+        line = pad_right('Hydraulic Zone', 40) // ' | ' // TRIM(report%hydro%zone_desc)
+        CALL emit_line(u, line)
+        CALL emit_line(u, separator)
+        CALL emit_line(u, '')
+
+        CALL emit_line(u, eqline)
+        CALL emit_line(u, '   3. FORMULA SELECTION & JUSTIFICATION')
+        CALL emit_line(u, eqline)
+        CALL emit_line(u, 'COMPARISON OF RESULTS:')
+        line = 'Method                         | Ns (-)   | Dn50 (m)   | M50 (kg)   | Kd_eq (-) | NOTES'
+        CALL emit_line(u, line)
+        CALL emit_line(u, separator_long)
         DO i = 1, SIZE(report%comparison)
             res = report%comparison(i)
             IF (res%valid) THEN
                 mass = report%inputs%rho_r * (res%Dn50**3)
-                ! Use fixed width char buffer for left alignment
-                name_field = res%name 
-                WRITE(u, '(A30, " | ", F8.4, " | ", F10.3, " | ", F10.0, " | ", F8.2, " | ", A)') &
-                    name_field, res%Ns, res%Dn50, mass, res%Kd, TRIM(res%note)
+                mass_i = NINT(mass)
+                CALL emit_line(u, fmt_formula_row(TRIM(res%name), res%Ns, res%Dn50, mass_i, res%Kd, TRIM(res%note)))
             END IF
         END DO
-        WRITE(u, '(A)') ""
-        WRITE(u, '(A)') "JUSTIFICATION & ANALYSIS:"
+        CALL emit_line(u, '')
+        CALL emit_line(u, 'JUSTIFICATION & ANALYSIS:')
         IF (ALLOCATED(report%justification)) THEN
             DO i = 1, SIZE(report%justification)
-                WRITE(u, '(A)') TRIM(report%justification(i))
+                CALL emit_line(u, TRIM(report%justification(i)))
             END DO
         END IF
-        WRITE(u, '(A)') TRIM(separator)
-        WRITE(u, '(A)') ""
-        
-        WRITE(u, '(A)') "==============================================================================================="
+        CALL emit_line(u, separator)
+
+        IF (LEN_TRIM(report%manual_override_message) > 0) THEN
+            CALL emit_line(u, '')
+            CALL emit_line(u, TRIM(report%manual_override_message))
+        END IF
+        CALL emit_line(u, '')
+
+        CALL emit_line(u, eqline)
         IF (report%inputs%use_en13383) THEN
-            WRITE(u, '(A)') "   4. ROCK ARMOUR LAYER DESIGN (EN 13383 Standard)"
+            CALL emit_line(u, '   4. ROCK ARMOUR LAYER DESIGN (EN 13383 Standard)')
         ELSE
-            WRITE(u, '(A)') "   4. ROCK ARMOUR LAYER DESIGN (Custom Grading)"
+            CALL emit_line(u, '   4. ROCK ARMOUR LAYER DESIGN (Custom Grading)')
         END IF
-        WRITE(u, '(A)') "==============================================================================================="
-        WRITE(u, '(A)') "PRIMARY ARMOR LAYER"
-        WRITE(u, '(A, F0.2, A)') "   Theoretical Required W    : ", report%armor_layer%target_W_kN, " kN"
-        WRITE(u, '(A, F0.0, A)') "   Theoretical Required M50  : ", report%armor_layer%target_M50_kg, " kg"
-        WRITE(u, '(A, F0.3, A)') "   Theoretical Required Dn50 : ", report%armor_layer%target_Dn_m, " m"
-        WRITE(u, '(A)') "----------------------------------------"
-        
+        CALL emit_line(u, eqline)
+        CALL emit_line(u, 'PRIMARY ARMOR LAYER')
+        CALL emit_line(u, '   Theoretical Required W    : ' // real_str(report%armor_layer%target_W_kN, 2) // ' kN')
+        CALL emit_line(u, '   Theoretical Required M50  : ' // int_str(NINT(report%armor_layer%target_M50_kg)) // ' kg')
+        CALL emit_line(u, '   Theoretical Required Dn50 : ' // real_str(report%armor_layer%target_Dn_m, 3) // ' m')
+        CALL emit_line(u, '----------------------------------------')
+
         IF (.NOT. report%armor_layer%design_valid .AND. report%inputs%use_en13383) THEN
-             WRITE(u, '(A)') "   [WARNING] No standard EN13383 grading found for this mass."
+            CALL emit_line(u, '   [WARNING] No standard EN13383 grading found for this mass.')
         ELSE
-             WRITE(u, '(A, A)')       "   Adopted rock grading                : ", TRIM(report%armor_layer%grading_name)
-             
-             IF (report%inputs%use_en13383) THEN
-                 ! === EN 13383 SPECIFIC FORMAT ===
-                 nll_val = report%armor_layer%w_min_kg
-                 nul_val = report%armor_layer%w_max_kg
-                 
-                 ell_val = 0.7_dp * nll_val
-                 eul_val = 1.5_dp * nul_val
-                 rep_m50 = 0.5_dp * (nll_val + nul_val)
-
-                 WRITE(u, '(A, F0.1, A)') "   Representative M50                  : ", rep_m50, " kg"
-                 WRITE(u, '(A, F0.1, A)') "   Nominal lower limit (NLL)           : ", nll_val, " kg"
-                 WRITE(u, '(A, F0.1, A)') "   Nominal upper limit (NUL)           : ", nul_val, " kg"
-                 WRITE(u, '(A, F0.1, A)') "   Extreme lower limit (ELL)           : ", ell_val, " kg"
-                 WRITE(u, '(A, F0.1, A)') "   Extreme upper limit (EUL)           : ", eul_val, " kg"
-             ELSE
-                 ! === CUSTOM GRADING FORMAT ===
-                 WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Min (Lower Limit)           : ", report%armor_layer%w_min_kn, &
-                    " kN (", report%armor_layer%w_min_kg, " kg)"
-                 WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Max (Upper Limit)           : ", report%armor_layer%w_max_kn, &
-                    " kN (", report%armor_layer%w_max_kg, " kg)"
-                 WRITE(u, '(A, F0.1, A)') "   Representative M50                  : ", report%armor_layer%m_mean_kg, " kg"
-             END IF
-
-             ! Common Geometry
-             WRITE(u, '(A, F0.3, A)') "   Nominal Diameter (Dn_rock)          : ", report%armor_layer%actual_dn, " m"
-             WRITE(u, '(A, F0.2, A)') "   Double Layer Thickness              : ", report%armor_layer%thickness, " m"
-             WRITE(u, '(A, F0.2)')    "   Packing Density [rocks/100m2]       : ", report%armor_layer%packing_density
+            CALL emit_line(u, fmt_detail_line('Adopted rock grading', TRIM(report%armor_layer%grading_name)))
+            IF (report%inputs%use_en13383) THEN
+                nll_val = report%armor_layer%w_min_kg
+                nul_val = report%armor_layer%w_max_kg
+                ell_val = 0.7_dp * nll_val
+                eul_val = 1.5_dp * nul_val
+                rep_m50 = 0.5_dp * (nll_val + nul_val)
+                CALL emit_line(u, fmt_detail_line('Representative M50', real_str(rep_m50, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Nominal lower limit (NLL)', real_str(nll_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Nominal upper limit (NUL)', real_str(nul_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Extreme lower limit (ELL)', real_str(ell_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Extreme upper limit (EUL)', real_str(eul_val, 1) // ' kg'))
+            ELSE
+                nll_val = report%armor_layer%w_min_kg
+                nul_val = report%armor_layer%w_max_kg
+                ell_val = 0.7_dp * nll_val
+                eul_val = 1.5_dp * nul_val
+                CALL emit_line(u, fmt_detail_line('Custom family basis', TRIM(report%armor_layer%custom_family)))
+                CALL emit_line(u, fmt_detail_line('Interpolated ratio (NUL/NLL)', &
+                    real_str(report%armor_layer%custom_ratio_nul_nll, 3)))
+                CALL emit_line(u, fmt_detail_line('Interpolation rule', TRIM(report%armor_layer%custom_ratio_note)))
+                CALL emit_line(u, fmt_detail_line('Representative M50', real_str(report%armor_layer%m_mean_kg, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Nominal lower limit (NLL)', real_str(nll_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Nominal upper limit (NUL)', real_str(nul_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Extreme lower limit (ELL)', real_str(ell_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Extreme upper limit (EUL)', real_str(eul_val, 1) // ' kg'))
+            END IF
+            CALL emit_line(u, fmt_detail_line('Nominal Diameter (Dn_rock)', real_str(report%armor_layer%actual_dn, 3) // ' m'))
+            CALL emit_line(u, fmt_detail_line('Double Layer Thickness', real_str(report%armor_layer%thickness, 2) // ' m'))
+            CALL emit_line(u, fmt_detail_line('Packing Density [rocks/100m2]', real_str(report%armor_layer%packing_density, 2)))
         END IF
-        
-        WRITE(u, '(A)') TRIM(separator)
-        WRITE(u, '(A)') "UNDERLAYER (FILTER LAYER)"
-        WRITE(u, '(A, F0.3, A)') "   Target Weight (M50 / 10)  : ", report%underlayer%target_W_kN, " kN"
-        WRITE(u, '(A, F0.1, A)') "   Target Mass (M50 / 10)    : ", report%underlayer%target_M50_kg, " kg"
-        WRITE(u, '(A)') "----------------------------------------"
-        
+
+        CALL emit_line(u, separator)
+        CALL emit_line(u, 'UNDERLAYER (FILTER LAYER)')
+        CALL emit_line(u, '   Target Weight (M50 / 10)  : ' // real_str(report%underlayer%target_W_kN, 3) // ' kN')
+        CALL emit_line(u, '   Target Mass (M50 / 10)    : ' // real_str(report%underlayer%target_M50_kg, 1) // ' kg')
+        CALL emit_line(u, '----------------------------------------')
+
         IF (.NOT. report%underlayer%design_valid .AND. report%inputs%use_en13383) THEN
-             WRITE(u, '(A)') "   [WARNING] No suitable standard underlayer grading found."
+            CALL emit_line(u, '   [WARNING] No suitable standard underlayer grading found.')
         ELSE
-             WRITE(u, '(A, A)')       "   Adopted rock grading                : ", TRIM(report%underlayer%grading_name)
-             
-             IF (report%inputs%use_en13383) THEN
-                 ! === EN 13383 SPECIFIC FORMAT ===
-                 nll_val = report%underlayer%w_min_kg
-                 nul_val = report%underlayer%w_max_kg
-                 
-                 ell_val = 0.7_dp * nll_val
-                 eul_val = 1.5_dp * nul_val
-                 rep_m50 = 0.5_dp * (nll_val + nul_val)
-
-                 WRITE(u, '(A, F0.1, A)') "   Representative M50                  : ", rep_m50, " kg"
-                 WRITE(u, '(A, F0.1, A)') "   Nominal lower limit (NLL)           : ", nll_val, " kg"
-                 WRITE(u, '(A, F0.1, A)') "   Nominal upper limit (NUL)           : ", nul_val, " kg"
-                 WRITE(u, '(A, F0.1, A)') "   Extreme lower limit (ELL)           : ", ell_val, " kg"
-                 WRITE(u, '(A, F0.1, A)') "   Extreme upper limit (EUL)           : ", eul_val, " kg"
-             ELSE
-                 ! === CUSTOM GRADING FORMAT ===
-                 WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Min (Lower Limit)           : ", report%underlayer%w_min_kn, &
-                    " kN (", report%underlayer%w_min_kg, " kg)"
-                 WRITE(u, '(A, F0.2, A, F0.0, A)') "   Grading Max (Upper Limit)           : ", report%underlayer%w_max_kn, &
-                    " kN (", report%underlayer%w_max_kg, " kg)"
-                 WRITE(u, '(A, F0.1, A)') "   Representative M50                  : ", report%underlayer%m_mean_kg, " kg"
-             END IF
-
-             ! Common Geometry
-             WRITE(u, '(A, F0.3, A)') "   Nominal Diameter (Dn_rock)          : ", report%underlayer%actual_dn, " m"
-             WRITE(u, '(A, F0.2, A)') "   Double Layer Thickness              : ", report%underlayer%thickness, " m"
-             WRITE(u, '(A, F0.2)')    "   Packing Density [rocks/100m2]       : ", report%underlayer%packing_density
+            CALL emit_line(u, fmt_detail_line('Adopted rock grading', TRIM(report%underlayer%grading_name)))
+            IF (report%inputs%use_en13383) THEN
+                nll_val = report%underlayer%w_min_kg
+                nul_val = report%underlayer%w_max_kg
+                ell_val = 0.7_dp * nll_val
+                eul_val = 1.5_dp * nul_val
+                rep_m50 = 0.5_dp * (nll_val + nul_val)
+                CALL emit_line(u, fmt_detail_line('Representative M50', real_str(rep_m50, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Nominal lower limit (NLL)', real_str(nll_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Nominal upper limit (NUL)', real_str(nul_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Extreme lower limit (ELL)', real_str(ell_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Extreme upper limit (EUL)', real_str(eul_val, 1) // ' kg'))
+            ELSE
+                nll_val = report%underlayer%w_min_kg
+                nul_val = report%underlayer%w_max_kg
+                ell_val = 0.7_dp * nll_val
+                eul_val = 1.5_dp * nul_val
+                CALL emit_line(u, fmt_detail_line('Custom family basis', TRIM(report%underlayer%custom_family)))
+                CALL emit_line(u, fmt_detail_line('Interpolated ratio (NUL/NLL)', &
+                    real_str(report%underlayer%custom_ratio_nul_nll, 3)))
+                CALL emit_line(u, fmt_detail_line('Interpolation rule', TRIM(report%underlayer%custom_ratio_note)))
+                CALL emit_line(u, fmt_detail_line('Representative M50', real_str(report%underlayer%m_mean_kg, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Nominal lower limit (NLL)', real_str(nll_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Nominal upper limit (NUL)', real_str(nul_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Extreme lower limit (ELL)', real_str(ell_val, 1) // ' kg'))
+                CALL emit_line(u, fmt_detail_line('Extreme upper limit (EUL)', real_str(eul_val, 1) // ' kg'))
+            END IF
+            CALL emit_line(u, fmt_detail_line('Nominal Diameter (Dn_rock)', real_str(report%underlayer%actual_dn, 3) // ' m'))
+            CALL emit_line(u, fmt_detail_line('Double Layer Thickness', real_str(report%underlayer%thickness, 2) // ' m'))
+            CALL emit_line(u, fmt_detail_line('Packing Density [rocks/100m2]', real_str(report%underlayer%packing_density, 2)))
         END IF
-        WRITE(u, '(A)') "==============================================================================================="
-
+        CALL emit_line(u, eqline)
         CLOSE(u)
-        
-        PRINT *, ""
-        PRINT *, "[System] Report saved to ", TRIM(filepath)
+        WRITE(*, '(A)') ''
+        WRITE(*, '(A)') '[System] Report saved to ' // TRIM(filepath)
     END SUBROUTINE generate_report_file
+
 
 END PROGRAM RockSlopeCalculator
