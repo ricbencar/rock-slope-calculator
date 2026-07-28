@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rock Slope Stability Calculator</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #07111f;
+    --panel: #0d1b2d;
+    --panel-2: #12243a;
+    --line: #29415d;
+    --text: #eaf2fb;
+    --muted: #9db0c5;
+    --accent: #4ca6ff;
+    --accent-2: #1f7fd9;
+    --good: #57d6a0;
+    --warn: #f4c66a;
+    --bad: #ff7f86;
+    --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 80% -10%, rgba(48, 130, 210, 0.22), transparent 38rem),
+      linear-gradient(180deg, #07111f 0%, #081522 100%);
+    color: var(--text);
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    font-size: 16px;
+  }
+
+  button, input, select { font: inherit; }
+
+  .app {
+    width: min(1720px, 100%);
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  .header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  .header h1 {
+    margin: 0;
+    font-size: clamp(1.8rem, 3vw, 2.7rem);
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+  }
+
+  .header p {
+    max-width: 760px;
+    margin: 9px 0 0;
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+
+  .status-pill {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 13px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(13, 27, 45, 0.78);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--good);
+    box-shadow: 0 0 0 5px rgba(87, 214, 160, 0.12);
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 360px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  .panel {
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(18, 36, 58, 0.96), rgba(10, 24, 40, 0.96));
+    box-shadow: var(--shadow);
+  }
+
+  .inputs-panel {
+    position: sticky;
+    top: 18px;
+    padding: 20px;
+  }
+
+  .panel-title {
+    margin: 0 0 4px;
+    font-size: 1.15rem;
+  }
+
+  .panel-subtitle {
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.45;
+  }
+
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 112px;
+    align-items: center;
+    gap: 9px 12px;
+  }
+
+  label {
+    color: #dbe8f5;
+    line-height: 1.25;
+  }
+
+  .symbol {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  input[type="number"], select {
+    width: 100%;
+    min-height: 39px;
+    border: 1px solid #35516f;
+    border-radius: 9px;
+    outline: none;
+    background: #081523;
+    color: var(--text);
+    padding: 8px 10px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  input[type="number"]:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(76, 166, 255, 0.14);
+  }
+
+  .divider {
+    height: 1px;
+    margin: 17px 0;
+    background: var(--line);
+  }
+
+  .select-label {
+    display: block;
+    margin-bottom: 7px;
+    font-weight: 600;
+  }
+
+  .check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    color: #dbe8f5;
+  }
+
+  .check-row input {
+    width: 18px;
+    height: 18px;
+    margin: 1px 0 0;
+    accent-color: var(--accent-2);
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .btn {
+    min-height: 43px;
+    border: 1px solid #3b5877;
+    border-radius: 10px;
+    background: #142a42;
+    color: var(--text);
+    cursor: pointer;
+    font-weight: 650;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  }
+
+  .btn:hover { background: #19344f; border-color: #52769b; }
+  .btn:active { transform: translateY(1px); }
+
+  .btn-primary {
+    grid-column: 1 / -1;
+    background: linear-gradient(180deg, #258fe9, #176ebd);
+    border-color: #4da9f6;
+  }
+
+  .btn-primary:hover { background: linear-gradient(180deg, #35a0f4, #1977ca); }
+
+  .content {
+    min-width: 0;
+    display: grid;
+    gap: 20px;
+  }
+
+  .hero-results {
+    padding: 21px;
+  }
+
+  .result-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 16px;
+  }
+
+  .result-heading h2 { margin: 0 0 6px; font-size: 1.2rem; }
+  .result-heading p { margin: 0; color: var(--muted); }
+
+  .zone-badge {
+    max-width: 390px;
+    padding: 8px 11px;
+    border: 1px solid rgba(76, 166, 255, 0.38);
+    border-radius: 9px;
+    background: rgba(76, 166, 255, 0.1);
+    color: #baddff;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    text-align: right;
+  }
+
+  .result-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(125px, 1fr));
+    gap: 12px;
+  }
+
+  .metric {
+    min-height: 107px;
+    padding: 14px;
+    border: 1px solid #2a4561;
+    border-radius: 13px;
+    background: rgba(5, 16, 29, 0.46);
+  }
+
+  .metric.featured {
+    border-color: rgba(76, 166, 255, 0.65);
+    background: linear-gradient(180deg, rgba(35, 117, 190, 0.24), rgba(5, 16, 29, 0.5));
+  }
+
+  .metric-label {
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.055em;
+  }
+
+  .metric-value {
+    margin-top: 9px;
+    font-size: clamp(1.3rem, 2vw, 2rem);
+    font-weight: 760;
+    letter-spacing: -0.03em;
+    white-space: nowrap;
+  }
+
+  .metric-unit {
+    margin-left: 3px;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  .metric-text {
+    margin-top: 8px;
+    font-weight: 650;
+    line-height: 1.3;
+  }
+
+  .design-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 13px;
+  }
+
+  .design-item {
+    padding: 13px 15px;
+    border: 1px solid #2a4561;
+    border-radius: 12px;
+    background: rgba(5, 16, 29, 0.35);
+  }
+
+  .design-item strong { display: block; margin-top: 4px; font-size: 1rem; }
+  .design-item span { color: var(--muted); font-size: 0.8rem; }
+
+  .table-panel, .report-panel { overflow: hidden; }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 17px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .section-head h2 { margin: 0; font-size: 1.06rem; }
+  .section-head p { margin: 3px 0 0; color: var(--muted); font-size: 0.83rem; }
+
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 900px;
+  }
+
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(41, 65, 93, 0.72);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    color: #b7c9da;
+    background: rgba(7, 17, 31, 0.58);
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.055em;
+  }
+
+  td { font-size: 0.88rem; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr.recommended { background: rgba(76, 166, 255, 0.095); }
+  tbody tr:hover { background: rgba(255, 255, 255, 0.025); }
+  .method-name { font-weight: 650; }
+  .note { color: var(--muted); line-height: 1.4; }
+
+  .tag {
+    display: inline-block;
+    margin-left: 7px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(87, 214, 160, 0.14);
+    color: #8fe5bf;
+    font-size: 0.68rem;
+    font-weight: 700;
+    vertical-align: 1px;
+  }
+
+  .report-toolbar {
+    display: flex;
+    gap: 8px;
+  }
+
+  .small-btn {
+    border: 1px solid #3b5877;
+    border-radius: 8px;
+    background: #11263d;
+    color: var(--text);
+    padding: 7px 10px;
+    cursor: pointer;
+    font-size: 0.82rem;
+  }
+
+  .small-btn:hover { background: #18334f; }
+
+  pre {
+    margin: 0;
+    min-height: 360px;
+    max-height: 720px;
+    overflow: auto;
+    padding: 20px;
+    background: #05101d;
+    color: #d8e7f5;
+    font: 14px/1.52 Consolas, "Courier New", monospace;
+    tab-size: 4;
+    white-space: pre;
+  }
+
+  .error-box {
+    display: none;
+    margin-bottom: 16px;
+    padding: 11px 13px;
+    border: 1px solid rgba(255, 127, 134, 0.48);
+    border-radius: 10px;
+    background: rgba(255, 127, 134, 0.09);
+    color: #ffc2c5;
+  }
+
+  .empty {
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  @media (max-width: 1250px) {
+    .result-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  @media (max-width: 900px) {
+    .app { padding: 14px; }
+    .header { align-items: flex-start; flex-direction: column; }
+    .layout { grid-template-columns: 1fr; }
+    .inputs-panel { position: static; }
+    .result-grid { grid-template-columns: repeat(2, 1fr); }
+    .design-strip { grid-template-columns: 1fr; }
+    .result-heading { flex-direction: column; }
+    .zone-badge { max-width: none; text-align: left; }
+  }
+
+  @media (max-width: 520px) {
+    .field-grid { grid-template-columns: 1fr 105px; }
+    .result-grid { grid-template-columns: 1fr; }
+    .actions { grid-template-columns: 1fr; }
+    .btn-primary { grid-column: auto; }
+    .section-head { align-items: flex-start; flex-direction: column; }
+  }
+
+  @media print {
+    body { background: white; color: black; }
+    .inputs-panel, .header p, .status-pill, .report-toolbar { display: none !important; }
+    .layout { display: block; }
+    .panel { box-shadow: none; border-color: #aaa; background: white; }
+    .content { display: block; }
+    .content > * { margin-bottom: 16px; }
+    pre { max-height: none; color: black; background: white; white-space: pre-wrap; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div>
+      <h1>Rock Slope Stability Calculator</h1>
+      <p>Hydraulic stability, armourstone sizing, grading selection, underlayer design, and detailed engineering output.</p>
+    </div>
+    <div class="status-pill"><span class="status-dot"></span><span>Ready for calculation</span></div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel inputs-panel">
+      <h2 class="panel-title">Design inputs</h2>
+      <p class="panel-subtitle">Enter the hydraulic, geometric, and material parameters.</p>
+
+      <div id="errorBox" class="error-box"></div>
+
+      <div class="field-grid">
+        <label for="Hs">Significant wave height<span class="symbol">Hs [m]</span></label>
+        <input id="Hs" type="number" step="any" value="2.00">
+
+        <label for="Tm10">Spectral period<span class="symbol">Tm-1,0 [s]</span></label>
+        <input id="Tm10" type="number" step="any" value="12.00">
+
+        <label for="hToe">Water depth at toe<span class="symbol">h_toe [m]</span></label>
+        <input id="hToe" type="number" step="any" value="7.00">
+
+        <label for="slopeM">Structure slope<span class="symbol">cot α</span></label>
+        <input id="slopeM" type="number" step="any" value="2.00">
+
+        <label for="foreshoreM">Foreshore slope<span class="symbol">cot β</span></label>
+        <input id="foreshoreM" type="number" step="any" value="30.00">
+
+        <label for="rhoR">Rock density<span class="symbol">ρr [kg/m³]</span></label>
+        <input id="rhoR" type="number" step="any" value="2650">
+
+        <label for="P">Notional permeability<span class="symbol">P [-]</span></label>
+        <input id="P" type="number" step="any" value="0.40">
+
+        <label for="dRatio">Core/armour diameter ratio<span class="symbol">Dcore / Dn50</span></label>
+        <input id="dRatio" type="number" step="any" value="0.30">
+
+        <label for="Sd">Damage level<span class="symbol">Sd [-]</span></label>
+        <input id="Sd" type="number" step="any" value="2.00">
+
+        <label for="duration">Storm duration<span class="symbol">hours</span></label>
+        <input id="duration" type="number" step="any" value="6.00">
+      </div>
+
+      <div class="divider"></div>
+
+      <label class="check-row" for="useEN">
+        <input id="useEN" type="checkbox" checked>
+        <span>Use EN 13383 standard grading</span>
+      </label>
+
+      <div class="divider"></div>
+
+      <label class="select-label" for="formula">Formula preference</label>
+      <select id="formula">
+        <option value="0">Automatic (Hydraulic Zone Logic)</option>
+        <option value="1">Hudson (1959)</option>
+        <option value="2">Van der Meer (2021)</option>
+        <option value="3">Van Gent Modified (2003)</option>
+        <option value="4">Van Gent Simplified (2003)</option>
+        <option value="5">Eldrup &amp; Andersen (2019)</option>
+        <option value="6">Etemad-Shahidi (2020)</option>
+        <option value="7">Scaravaglione (Mod. VG 2025)</option>
+        <option value="8">Scaravaglione (Mod. ES 2025)</option>
+      </select>
+
+      <div class="actions">
+        <button id="calculateBtn" class="btn btn-primary" type="button">Calculate</button>
+        <button id="resetBtn" class="btn" type="button">Reset</button>
+        <button id="printBtn" class="btn" type="button">Print</button>
+      </div>
+    </aside>
+
+    <section class="content">
+      <section class="panel hero-results">
+        <div class="result-heading">
+          <div>
+            <h2>Design result</h2>
+            <p id="methodNote">Calculated using the selected stability method.</p>
+          </div>
+          <div id="zoneBadge" class="zone-badge">Hydraulic zone</div>
+        </div>
+
+        <div class="result-grid">
+          <div class="metric featured">
+            <div class="metric-label">Required Dn50</div>
+            <div class="metric-value"><span id="dnResult">—</span><span class="metric-unit">m</span></div>
+          </div>
+          <div class="metric featured">
+            <div class="metric-label">Required M50</div>
+            <div class="metric-value"><span id="massResult">—</span><span class="metric-unit">kg</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Stability number</div>
+            <div class="metric-value"><span id="nsResult">—</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Equivalent Kd</div>
+            <div class="metric-value"><span id="kdResult">—</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Breaker type</div>
+            <div id="breakerResult" class="metric-text">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Selected method</div>
+            <div id="methodResult" class="metric-text">—</div>
+          </div>
+        </div>
+
+        <div class="design-strip">
+          <div class="design-item">
+            <span>Primary armour grading</span>
+            <strong id="armorGrading">—</strong>
+          </div>
+          <div class="design-item">
+            <span>Underlayer grading</span>
+            <strong id="underlayerGrading">—</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel table-panel">
+        <div class="section-head">
+          <div>
+            <h2>Formula comparison</h2>
+            <p>Valid results calculated for the current design conditions.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Method</th>
+                <th>Ns</th>
+                <th>Dn50 (m)</th>
+                <th>M50 (kg)</th>
+                <th>Kd eq.</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="comparisonBody">
+              <tr><td colspan="6" class="empty">Calculate to display results.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel report-panel">
+        <div class="section-head">
+          <div>
+            <h2>Detailed calculation report</h2>
+            <p>Complete calculation output and grading design.</p>
+          </div>
+          <div class="report-toolbar">
+            <button id="copyBtn" class="small-btn" type="button">Copy</button>
+            <button id="downloadBtn" class="small-btn" type="button">Download output.txt</button>
+          </div>
+        </div>
+        <pre id="reportOutput">Calculate to generate the detailed report.</pre>
+      </section>
+    </section>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+const G = 9.80665;
+const RHO_WATER = 1025.0;
+
+const DEFAULTS = Object.freeze({
+  Hs: 2.0,
+  Tm10: 12.0,
+  h_toe: 7.0,
+  slope_m: 2.0,
+  foreshore_m: 30.0,
+  rho_r: 2650.0,
+  rho_w: RHO_WATER,
+  P: 0.4,
+  D_ratio: 0.3,
+  Sd: 2.0,
+  duration: 6.0,
+  use_en13383: true,
+  formula_override_index: 0,
+  custom_family: "AUTO"
+});
+
+const STANDARD_GRADINGS = [
+  { name: "CP32/90", NLL: 0.868, NUL: 19.319, M50: 10.0935 },
+  { name: "CP45/125", NLL: 2.415, NUL: 51.758, M50: 27.0865 },
+  { name: "CP63/180", NLL: 6.626, NUL: 154.548, M50: 80.587 },
+  { name: "CP90/250", NLL: 19.319, NUL: 414.063, M50: 216.691 },
+  { name: "CP45/180", NLL: 2.415, NUL: 154.548, M50: 78.4815 },
+  { name: "CP90/180", NLL: 19.319, NUL: 154.548, M50: 86.9335 },
+  { name: "LMA 5-40", NLL: 5.0, NUL: 40.0, M50: 22.5 },
+  { name: "LMA 10-60", NLL: 10.0, NUL: 60.0, M50: 35.0 },
+  { name: "LMA 15-120", NLL: 15.0, NUL: 120.0, M50: 67.5 },
+  { name: "LMA 40-200", NLL: 40.0, NUL: 200.0, M50: 120.0 },
+  { name: "LMA 60-300", NLL: 60.0, NUL: 300.0, M50: 180.0 },
+  { name: "LMA 15-300", NLL: 15.0, NUL: 300.0, M50: 157.5 },
+  { name: "HMA 300-1000", NLL: 300.0, NUL: 1000.0, M50: 650.0 },
+  { name: "HMA 1000-3000", NLL: 1000.0, NUL: 3000.0, M50: 2000.0 },
+  { name: "HMA 3000-6000", NLL: 3000.0, NUL: 6000.0, M50: 4500.0 },
+  { name: "HMA 6000-10000", NLL: 6000.0, NUL: 10000.0, M50: 8000.0 },
+  { name: "HMA 10000-15000", NLL: 10000.0, NUL: 15000.0, M50: 12500.0 }
+].sort((a, b) => a.M50 - b.M50);
+
+let currentReportText = "";
+let currentResult = null;
+
+const $ = (id) => document.getElementById(id);
+const fixed = (value, digits) => Number(value).toFixed(digits);
+const spaces = (count) => " ".repeat(Math.max(0, count));
+const padRight = (value, width) => {
+  const text = String(value);
+  return text + spaces(width - text.length);
+};
+const repeat = (char, count) => char.repeat(count);
+
+function makeResult(name, Dn50, Ns, Kd, note, valid = true) {
+  return { name, Dn50, Ns, Kd, note, valid };
+}
+
+function solveWavelength(T, h) {
+  if (h <= 0) return 0.0;
+  const L0 = G * T * T / (2 * Math.PI);
+  const k0h = 2 * Math.PI * h / L0;
+  const term = Math.pow(6.0 / 5.0, k0h) * Math.sqrt(k0h);
+  let L = L0 * Math.tanh(term);
+  let dL = 1.0;
+  const delta = 1e-8;
+  let iter = 0;
+  while (Math.abs(dL / L) >= delta && iter < 100) {
+    const val = 2 * Math.PI * h / L;
+    const f1 = L - L0 * Math.tanh(val);
+    const valDelta = 2 * Math.PI * h / (L + delta);
+    const f2 = (L + delta) - L0 * Math.tanh(valDelta);
+    const denom = f2 - f1;
+    if (denom === 0) break;
+    dL = delta * f1 / denom;
+    L -= dL;
+    iter += 1;
+  }
+  return L;
+}
+
+function analyzeHydraulics(input, dp) {
+  const h = {};
+  h.L0 = G * Math.pow(input.Tm10, 2) / (2 * Math.PI);
+  h.L_toe = solveWavelength(input.Tm10, input.h_toe);
+  h.C = input.Tm10 > 0 ? h.L_toe / input.Tm10 : 0;
+
+  const k = h.L_toe > 0 ? 2 * Math.PI / h.L_toe : 0;
+  const kh = k * input.h_toe;
+  let n;
+  if (kh > 20) n = 0.5;
+  else if (kh <= 0) n = 1.0;
+  else n = 0.5 * (1 + (2 * kh) / Math.sinh(2 * kh));
+  h.Cg = n * h.C;
+
+  h.s_m10 = input.Hs / h.L0;
+  h.s_local = h.L_toe > 0 ? input.Hs / h.L_toe : 0;
+  h.xi_m10 = h.s_m10 > 0 ? Math.tan(dp.alpha_rad) / Math.sqrt(h.s_m10) : 0;
+  h.rel_depth = input.Hs > 0 ? input.h_toe / input.Hs : 999.0;
+
+  if (h.xi_m10 < 0.5) h.breaker_type = "Spilling";
+  else if (h.xi_m10 < 1.8) h.breaker_type = "Plunging";
+  else if (h.xi_m10 < 3.0) h.breaker_type = "Surging";
+  else h.breaker_type = "Collapsing/Surging";
+
+  if (h.rel_depth > 3.0) h.zone_desc = "ZONE 1: Deep to Intermediate (h/Hm0 > 3.0)";
+  else if (h.rel_depth > 1.5) h.zone_desc = "ZONE 2: Shallow Water (1.5 < h/Hm0 <= 3.0)";
+  else if (h.rel_depth > 0.5) h.zone_desc = "ZONE 3: Very Shallow Water (0.5 < h/Hm0 <= 1.5)";
+  else h.zone_desc = "ZONE 4: Extremely Shallow Water (h/Hm0 <= 0.5)";
+
+  return h;
+}
+
+function calcHudson(p, dp, h) {
+  let Kd;
+  if (h.rel_depth > 3.0) Kd = 4.0;
+  else if (h.rel_depth > 1.5) Kd = 3.5;
+  else if (h.rel_depth > 0.5) Kd = 3.0;
+  else Kd = 2.0;
+  const Dn = (1.27 * p.Hs) / (dp.Delta * Math.pow(Kd * dp.cot_alpha, 1.0 / 3.0));
+  const Ns = (1.27 * p.Hs) / (dp.Delta * Dn);
+  return makeResult("Hudson (1959)", Dn, Ns, Kd, "Hudson (1959) - Legacy Ref");
+}
+
+function calcVdm2021(p, dp, h) {
+  const cPl = 6.49;
+  const cSu = 0.97;
+  const termCrit = (cPl / cSu) * Math.pow(p.P, 0.31) * Math.sqrt(Math.tan(dp.alpha_rad));
+  const xiCr = Math.pow(termCrit, 1.0 / (p.P + 0.5));
+  const damageTerm = Math.pow(p.Sd / Math.sqrt(dp.N_waves), 0.2);
+  let Ns;
+  let note;
+  if (h.xi_m10 < xiCr) {
+    Ns = cPl * Math.pow(p.P, 0.18) * damageTerm * Math.pow(h.xi_m10, -0.5);
+    note = `Van der Meer 2021 (Plunging: xi < ${fixed(xiCr, 2)})`;
+  } else {
+    Ns = cSu * Math.pow(p.P, -0.13) * damageTerm * Math.sqrt(dp.cot_alpha) * Math.pow(h.xi_m10, p.P);
+    note = `Van der Meer 2021 (Surging: xi > ${fixed(xiCr, 2)})`;
+  }
+  const Dn = p.Hs / (dp.Delta * Ns);
+  const Kd = Math.pow(Ns, 3) / dp.cot_alpha;
+  return makeResult("Van der Meer (2021)", Dn, Ns, Kd, note);
+}
+
+function calcVanGentModified(p, dp, h) {
+  let h2Ratio;
+  if (h.rel_depth >= 3.0) {
+    h2Ratio = 1.4;
+  } else if (h.rel_depth < 1.5) {
+    h2Ratio = 1.2 + 0.2 * (1.5 - h.rel_depth) / 1.5;
+    h2Ratio = Math.min(h2Ratio, 1.4);
+  } else {
+    h2Ratio = 1.2 + 0.2 * (h.rel_depth - 1.5) / 1.5;
+  }
+
+  const cPl = 8.4;
+  const cSu = 1.3;
+  const termCrit = (cPl / cSu) * Math.pow(p.P, 0.31) * Math.sqrt(Math.tan(dp.alpha_rad));
+  const xiCr = Math.pow(termCrit, 1.0 / (p.P + 0.5));
+  const damageTerm = Math.pow(p.Sd / Math.sqrt(dp.N_waves), 0.2);
+  const ratioTerm = Math.pow(h2Ratio, -1.0);
+  let Ns;
+  let note;
+  if (h.xi_m10 < xiCr) {
+    Ns = 8.4 * Math.pow(p.P, 0.18) * damageTerm * Math.pow(h.xi_m10, -0.5) * ratioTerm;
+    note = `Van Gent Modified (2003) Plunging (H2%/Hs=${fixed(h2Ratio, 2)})`;
+  } else {
+    Ns = 1.3 * Math.pow(p.P, -0.13) * damageTerm * Math.sqrt(dp.cot_alpha) * Math.pow(h.xi_m10, p.P) * ratioTerm;
+    note = `Van Gent Modified (2003) Surging (H2%/Hs=${fixed(h2Ratio, 2)})`;
+  }
+  const Dn = p.Hs / (dp.Delta * Ns);
+  const Kd = Math.pow(Ns, 3) / dp.cot_alpha;
+  return makeResult("Van Gent Modified (2003)", Dn, Ns, Kd, note);
+}
+
+function calcVanGentSimplified(p, dp) {
+  const cVG = 1.75;
+  const damageTerm = Math.pow(p.Sd / Math.sqrt(dp.N_waves), 0.2);
+  const permTerm = 1.0 + p.D_ratio;
+  const Ns = cVG * Math.sqrt(dp.cot_alpha) * permTerm * damageTerm;
+  const Dn = p.Hs / (dp.Delta * Ns);
+  const Kd = Math.pow(Ns, 3) / dp.cot_alpha;
+  return makeResult("Van Gent Simplified (2003)", Dn, Ns, Kd, "Van Gent Simplified (2003)");
+}
+
+function calcEldrup(p, dp, h) {
+  const cEA1 = 4.5;
+  const cEA2 = 3.1;
+  const damageTerm = Math.pow(p.Sd / Math.sqrt(dp.N_waves), 0.2);
+  const NsPl = cEA1 * damageTerm * Math.pow(1.6, p.P) * Math.pow(h.xi_m10, 0.4 * p.P - 0.67);
+  const cotTerm = Math.pow(Math.min(dp.cot_alpha, 2.0), 0.23);
+  const NsSu = cEA2 * damageTerm * Math.pow(p.P, 0.17) * cotTerm;
+  const Ns = h.xi_m10 < 2.5 ? NsPl : NsSu;
+  const note = h.xi_m10 < 2.5 ? "Eldrup (Plunging)" : "Eldrup (Surging)";
+  const Dn = p.Hs / (dp.Delta * Ns);
+  const Kd = Math.pow(Ns, 3) / dp.cot_alpha;
+  return makeResult("Eldrup & Andersen (2019)", Dn, Ns, Kd, note);
+}
+
+function calcEs2020(p, dp, h) {
+  const cES1 = 4.5;
+  const cES2 = 3.9;
+  const m = 1.0 / p.foreshore_m;
+  const termNw = Math.pow(dp.N_waves, -0.1);
+  const termSd = Math.pow(p.Sd, 1.0 / 6.0);
+  let fsFactor;
+  let suffix;
+  if (h.rel_depth < 3.0) {
+    fsFactor = Math.max(0.1, 1.0 - 3.0 * m);
+    suffix = " (Depth-Limited)";
+  } else {
+    fsFactor = 1.0;
+    suffix = " (Deep)";
+  }
+  let Ns;
+  let note;
+  if (h.xi_m10 < 1.8) {
+    Ns = cES1 * dp.Cp * termNw * termSd * Math.pow(h.xi_m10, -7.0 / 12.0) * fsFactor;
+    note = "Etemad-Shahidi (Plunging)" + suffix;
+  } else {
+    Ns = cES2 * dp.Cp * termNw * termSd * Math.pow(h.xi_m10, -1.0 / 3.0) * fsFactor;
+    note = "Etemad-Shahidi (Surging)" + suffix;
+  }
+  const Dn = p.Hs / (dp.Delta * Ns);
+  const Kd = Math.pow(Ns, 3) / dp.cot_alpha;
+  return makeResult("Etemad-Shahidi (2020)", Dn, Ns, Kd, note);
+}
+
+function calcModifiedVG(p, dp, h) {
+  const cVGNew = 3.3;
+  const permTerm = 1.0 + p.D_ratio;
+  const sSafe = Math.max(h.s_m10, 0.005);
+  const steepTerm = Math.pow(sSafe, 0.1);
+  const damageTerm = Math.pow(p.Sd / Math.sqrt(dp.N_waves), 0.2);
+  let Ns = cVGNew * Math.sqrt(dp.cot_alpha) * permTerm * steepTerm * damageTerm;
+  let kdCalc = Math.pow(Ns, 3) / dp.cot_alpha;
+  let note = "Scaravaglione (Mod. VG)";
+  if (kdCalc > 5.0) {
+    Ns = Math.pow(5.0 * dp.cot_alpha, 1.0 / 3.0);
+    kdCalc = 5.0;
+    note += " [Capped Kd=5.0]";
+  }
+  const Dn = p.Hs / (dp.Delta * Ns);
+  const Kd = Math.pow(Ns, 3) / dp.cot_alpha;
+  return makeResult("Scaravaglione (Mod. VG 2025)", Dn, Ns, Kd, note);
+}
+
+function calcModifiedES(p, dp, h) {
+  if (h.xi_m10 < 1.8) {
+    return makeResult("Scaravaglione (Mod. ES 2025)", 0, 0, 0, "N/A (Req. xi > 1.8)", false);
+  }
+  const cESNew = 3.55;
+  const termN = Math.pow(dp.N_waves, -0.1);
+  const termSd = Math.pow(p.Sd, 1.0 / 6.0);
+  const termCot = Math.pow(dp.cot_alpha, 1.0 / 3.0);
+  const sSafe = Math.max(h.s_m10, 0.005);
+  const termS = Math.pow(sSafe, 1.0 / 20.0);
+  let Ns = cESNew * dp.Cp * termN * termCot * termSd * termS;
+  const kdCalc = Math.pow(Ns, 3) / dp.cot_alpha;
+  let note = "Scaravaglione (Mod. ES)";
+  if (kdCalc > 5.0) {
+    Ns = Math.pow(5.0 * dp.cot_alpha, 1.0 / 3.0);
+    note += " [Capped Kd=5.0]";
+  }
+  const Dn = p.Hs / (dp.Delta * Ns);
+  const Kd = Math.pow(Ns, 3) / dp.cot_alpha;
+  return makeResult("Scaravaglione (Mod. ES 2025)", Dn, Ns, Kd, note);
+}
+
+function selectRecommendation(report) {
+  const depthRatio = report.hydro.rel_depth;
+  const log = report.justification;
+  const getResult = (key) => report.comparison.find((r) => r.name.includes(key) && r.valid) || makeResult("", 0, 0, 0, "", false);
+
+  const vdm = getResult("Van der Meer (2021)");
+  const vgSimp = getResult("Van Gent Simplified");
+  const es = getResult("Etemad-Shahidi");
+  const modVG = getResult("Mod. VG");
+  const modES = getResult("Mod. ES");
+
+  if (depthRatio > 3.0) {
+    report.recommended = vdm;
+    log.push("### 1. HYDRAULIC CONTEXT: Deep / Intermediate Water");
+    log.push(`   The structure is located in deep water relative to the wave height (h/Hm0 = ${fixed(depthRatio, 2)} > 3.0).`);
+    log.push("   In this regime, the wave height distribution strictly follows the **Rayleigh distribution**.");
+    log.push("   Key characteristics:");
+    log.push("     * The ratio H2%/Hs is constant at approximately 1.4.");
+    log.push("     * Wave breaking is limited to whitecapping or direct interaction with the armor layer.");
+    log.push("     * The spectral shape is standard (JONSWAP/Pierson-Moskowitz), and energy transfer to low-frequencies is minimal.");
+    log.push("");
+    log.push("### 2. FORMULA COMPARISON & ANALYSIS");
+    log.push("   **A. Van der Meer (2021 Rewritten) [RECOMMENDED]**");
+    log.push("      * **Advantages:** This formula is the modernized industry standard.");
+    log.push("        Van der Meer (2021) rewrote the original formula to use the spectral period (Tm-1,0),");
+    log.push("        eliminating the influence of spectral shape.");
+    log.push("        Van der Meer et al. (2024) confirmed its validity for h/Hm0 > 1.5, preferring Hm0 over H1/3 for nonlinear waves.");
+    log.push("      * **Physics:** It correctly assumes a Rayleigh distribution of wave heights, aligning with the actual deep-water statistics.");
+    log.push("   **B. Van Gent Modified (2003)**");
+    log.push("      * **Context:** This formula incorporates the ratio H2%/Hs.");
+    log.push("        In deep water, with H2%/Hs = 1.4, this formula essentially converges closely with the Van der Meer predictions.");
+    log.push("        However, its specific calibration was focused on the effects of shallow foreshores.");
+    log.push("   **C. Etemad-Shahidi (2020)**");
+    log.push("      * **Comparison:** Etemad-Shahidi (2020) provides a robust formula validated for both deep and shallow water.");
+    log.push("        It introduces a physical permeability parameter (D_core/D_armor) to replace the nominal P factor,");
+    log.push("        reducing uncertainty. However, Van der Meer remains the primary standard for deep water.");
+    if (es.valid && vdm.valid && vdm.Dn50 > 0) {
+      const diffPct = Math.abs(vdm.Dn50 - es.Dn50) / vdm.Dn50;
+      if (diffPct > 0.10) {
+        log.push("      * **Note on Divergence:** The result deviates from Van der Meer here. This typically occurs in the 'transition zone'");
+        log.push("        of the surf similarity parameter (xi approx 2.0 - 4.5). Etemad-Shahidi transitions to Surging physics");
+        log.push("        earlier (xi > 1.8), predicting higher stability, whereas Van der Meer maintains Plunging physics");
+        log.push("        (lower stability) until a higher critical threshold. Van der Meer is more conservative here.");
+      } else {
+        log.push("        It typically converges with Van der Meer here.");
+      }
+    }
+    log.push("");
+    log.push("### 3. FINAL JUSTIFICATION");
+    log.push("   **Use [Van der Meer (2021 Rewritten)]**.");
+    log.push("   It provides the most theoretically consistent result for non-depth-limited waves.");
+    if (es.valid && vdm.valid) {
+      log.push(`   *Verification:* Etemad-Shahidi yields Dn50 = ${fixed(es.Dn50, 3)}m (Difference: ${fixed(Math.abs(vdm.Dn50 - es.Dn50), 3)}m).`);
+    }
+  } else if (depthRatio > 1.5) {
+    report.recommended = vdm;
+    log.push("### 1. HYDRAULIC CONTEXT: Shallow Water (Transition Zone)");
+    log.push(`   The structure is in the transition zone (1.5 < h/Hm0 = ${fixed(depthRatio, 2)} <= 3.0).`);
+    log.push("   Key characteristics:");
+    log.push("     * **Spectral Truncation:** The largest waves in the spectrum break on the foreshore.");
+    log.push("     * **Distribution Shift:** The wave height distribution deviates from Rayleigh; H2%/Hm0 drops below 1.4.");
+    log.push("     * **Shoaling:** Significant shoaling modifies the wave shape before impact, creating peaked crests and flat troughs.");
+    log.push("");
+    log.push("### 2. FORMULA COMPARISON & ANALYSIS");
+    log.push("   **A. Van der Meer (2021)**");
+    log.push("      * **Advantages:** Van der Meer et al. (2024) extensively re-analyzed shallow water data and concluded");
+    log.push("        that the rewritten Van der Meer formula (using Tm-1,0) is valid down to h/Hm0 = 1.5.");
+    log.push("        It performs reasonably well, with slightly less reliability in the 1.0 < h/Hm0 < 1.5 range.");
+    log.push("      * **Note:** For nonlinear waves in this zone, using Hm0 is preferred over H1/3 for nonlinear waves to avoid deviations.");
+    log.push("   **B. Van Gent Modified (2003)**");
+    log.push("      * **Constraint:** This formula explicitly relies on the ratio H2%/Hs. Research by Van der Meer et al. (2024)");
+    log.push("        highlights that predicting H2% accurately in this transition zone (where the ratio dips to ~1.2)");
+    log.push("        is notoriously inaccurate without physical modeling. The formula is valid, but the input uncertainty is high.");
+    log.push("   **C. Van Gent et al. (2003) Simplified**");
+    log.push("      * **Context:** This formula was specifically derived for shallow foreshores.");
+    log.push("        However, Van der Meer et al. (2024) found that the simplified formula often does not match the data");
+    log.push("        in the surging domain as well as the rewritten Van der Meer formula.");
+    log.push("");
+    log.push("### 3. FINAL JUSTIFICATION");
+    log.push("   **Use [Van der Meer (2021 Rewritten)]**.");
+    log.push("   Recent research (2024) confirms its validity in this depth range (h/Hm0 > 1.5), favoring it over simplified methods");
+    log.push("   due to the uncertainties in predicting H2% required for the Van Gent Modified formula.");
+  } else if (depthRatio > 0.5) {
+    if (modES.valid) {
+      report.recommended = modES;
+      log.push("### 1. HYDRAULIC CONTEXT: Very Shallow Water (Surf Zone)");
+      log.push(`   The structure is in the surf zone (0.5 < h/Hm0 = ${fixed(depthRatio, 2)} <= 1.5).`);
+      log.push("   Key characteristics:");
+      log.push("     * **Severe Breaking:** Waves are constantly breaking.");
+      log.push("     * **Saturation:** Wave height is depth-limited (H ~ 0.5h). Increasing offshore energy does not increase load.");
+      log.push("     * **Infragravity Dominance:** Scaravaglione et al. (2025) and VdM (2024) note that infragravity waves");
+      log.push("       begin to dominate the spectrum, causing Tm-1,0 to increase massively (up to 4x).");
+      log.push("     * **Formula Deviation:** Standard formulas fail here because the stability curves flatten out (Horizontal Trend).");
+      log.push("");
+      log.push("### 2. FORMULA COMPARISON & ANALYSIS");
+      log.push("   **A. Standard Formulas (VdM, VG, Standard ES)**");
+      log.push("      * **Failure Mode:** Scaravaglione et al. (2025) demonstrated that these formulas fail to converge here.");
+      log.push("        Using the inflated spectral period results in over-predicted stability (for surging) or under-predicted (for plunging).");
+      log.push("   **B. Scaravaglione (Modified ES 2025) [RECOMMENDED]**");
+      log.push("      * **Advantages:** This formula explicitly **decouples** the wave steepness term (s^0.05) from the structure slope term.");
+      log.push("      * **Physics:** It is calibrated specifically for surging/bore-like waves in the surf zone using new coefficients (c_ES,new=3.55).");
+      log.push("      * **Safety Cap Applied:** The formula has a weak dependence on steepness. For very long swells, it may predict");
+      log.push("        theoretically high stability (Kd > 10). This system has capped Kd at 5.0 to ensure physical realism.");
+      log.push("");
+      log.push("### 3. FINAL JUSTIFICATION");
+      log.push("   **Use [Scaravaglione (Modified ES 2025)]**.");
+      log.push("   This represents the state-of-the-art for broken waves in very shallow water, correcting the overestimation of damage.");
+    } else {
+      report.recommended = vgSimp;
+      log.push("### 1. HYDRAULIC CONTEXT: Very Shallow Water (Surf Zone) (Plunging)");
+      log.push("   The structure is in the surf zone, but conditions are **Plunging** (xi < 1.8).");
+      log.push("   The Modified ES formula is only calibrated for surging/bore conditions.");
+      log.push("");
+      log.push("### 3. FINAL JUSTIFICATION");
+      log.push("   **Use [Van Gent Simplified (2003)]**.");
+      log.push("   It acts as a robust fallback. Caution is advised as damage may be underpredicted for impermeable structures.");
+    }
+  } else {
+    report.recommended = modVG;
+    log.push("### 1. HYDRAULIC CONTEXT: Extremely Shallow Water (Swash Zone)");
+    log.push(`   The structure is located effectively in the **Swash Zone** (h/Hm0 = ${fixed(depthRatio, 2)} <= 0.5).`);
+    log.push("   Key characteristics:");
+    log.push("     * **Aeration:** High air entrainment reduces the effective fluid density and buoyancy of the rocks.");
+    log.push("     * **Impact:** Wave impact is characterized by a high-velocity turbulent bore.");
+    log.push("     * **Hydrostatics:** The hydrostatic cushioning effect is negligible.");
+    log.push("");
+    log.push("### 2. FORMULA COMPARISON & ANALYSIS");
+    log.push("   **A. Standard Van Gent (2003)**");
+    log.push("      * **Disadvantages:** Using the standard coefficient (1.75) here is **Unsafe**.");
+    log.push("        Scaravaglione et al. (2025) showed that stability is significantly lower than predicted by intermediate-depth formulas");
+    log.push("        due to the lack of buoyancy and intense turbulence.");
+    log.push("   **B. Scaravaglione (Modified VG 2025) [RECOMMENDED]**");
+    log.push("      * **Advantages:** This formula uses a recalibrated coefficient (C_VG = 3.3 instead of 1.75).");
+    log.push("      * **Physics:** It explicitly accounts for the increased instability in the swash zone, correcting the underestimation");
+    log.push("        of damage by the original VG formula in this specific regime.");
+    log.push("");
+    log.push("### 3. FINAL JUSTIFICATION");
+    log.push("   **Use [Scaravaglione (Modified VG 2025)]**.");
+    log.push("   It provides the necessary safety margin for swash zone instability where standard formulas fail.");
+  }
+}
+
+function gradingFamily(name) {
+  if (name.startsWith("HMA ")) return "HMA";
+  if (name.startsWith("LMA ")) return "LMA";
+  if (name.startsWith("CP")) return "CP";
+  return "UNKNOWN";
+}
+
+function getFamilyGradings(family) {
+  return STANDARD_GRADINGS.filter((g) => gradingFamily(g.name) === family).sort((a, b) => a.M50 - b.M50);
+}
+
+function selectCustomFamily(targetMass) {
+  const safeMass = Math.max(targetMass, 1e-9);
+  let bestScore = Number.MAX_VALUE;
+  let bestFamily = "LMA";
+  for (const g of STANDARD_GRADINGS) {
+    const family = gradingFamily(g.name);
+    if (family === "UNKNOWN") continue;
+    let score = Math.abs(Math.log(safeMass) - Math.log(Math.max(g.M50, 1e-9)));
+    if (family === "CP") score += 0.08;
+    if (score < bestScore) {
+      bestScore = score;
+      bestFamily = family;
+    }
+  }
+  return bestFamily;
+}
+
+function interpolateFamilyRatio(targetMass, family) {
+  const familyGradings = getFamilyGradings(family);
+  if (familyGradings.length === 0) {
+    return { ratio: 3.0, note: "fallback ratio R=NUL/NLL = 3.0 (no family data)" };
+  }
+
+  const x = familyGradings.map((g) => Math.log(Math.max(g.M50, 1e-9)));
+  const y = familyGradings.map((g) => Math.log(Math.max(g.NUL / g.NLL, 1.0 + 1e-9)));
+  const xt = Math.log(Math.max(targetMass, 1e-9));
+
+  if (familyGradings.length === 1) {
+    return {
+      ratio: familyGradings[0].NUL / familyGradings[0].NLL,
+      note: `${family} family single-point ratio used`
+    };
+  }
+  if (xt <= x[0]) {
+    return {
+      ratio: Math.exp(y[0]),
+      note: `${family} family ratio clamped to lower-end class ${familyGradings[0].name}`
+    };
+  }
+  const last = familyGradings.length - 1;
+  if (xt >= x[last]) {
+    return {
+      ratio: Math.exp(y[last]),
+      note: `${family} family ratio clamped to upper-end class ${familyGradings[last].name}`
+    };
+  }
+  for (let i = 0; i + 1 < familyGradings.length; i += 1) {
+    if (xt >= x[i] && xt <= x[i + 1]) {
+      const t = (xt - x[i]) / (x[i + 1] - x[i]);
+      const logRatio = y[i] + t * (y[i + 1] - y[i]);
+      return {
+        ratio: Math.exp(logRatio),
+        note: `${family} family ratio interpolated between ${familyGradings[i].name} and ${familyGradings[i + 1].name}`
+      };
+    }
+  }
+  return {
+    ratio: Math.exp(y[last]),
+    note: `${family} family ratio fallback to upper-end class ${familyGradings[last].name}`
+  };
+}
+
+function designLayer(targetMass, targetDn, isArmor, input) {
+  const ld = {
+    layer_name: isArmor ? "Primary Armor" : "Underlayer",
+    grading_name: "",
+    target_M50_kg: targetMass,
+    target_Dn_m: targetDn,
+    target_W_kN: targetMass * G / 1000.0,
+    used_custom_interpolation: false,
+    custom_family: "",
+    custom_ratio_nul_nll: 0.0,
+    custom_ratio_note: "",
+    design_valid: false
+  };
+
+  const gammaR = input.rho_r * G / 1000.0;
+  const gradingEN13383 = input.use_en13383;
+
+  if (gradingEN13383) {
+    let selected = null;
+    let minRangeWidth = Number.MAX_VALUE;
+    for (const g of STANDARD_GRADINGS) {
+      if (targetMass > g.NLL && targetMass < g.NUL) {
+        const currentRange = g.NUL - g.NLL;
+        if (currentRange < minRangeWidth) {
+          minRangeWidth = currentRange;
+          selected = g;
+        }
+      }
+    }
+    if (selected) {
+      ld.grading_name = selected.name;
+      ld.m_mean_kg = selected.M50;
+      ld.w_min_kg = selected.NLL;
+      ld.w_max_kg = selected.NUL;
+      ld.w_min_kn = selected.NLL * G / 1000.0;
+      ld.w_max_kn = selected.NUL * G / 1000.0;
+      ld.w_mean_kn = ld.m_mean_kg * G / 1000.0;
+      ld.actual_dn = Math.pow(ld.w_mean_kn / gammaR, 1.0 / 3.0);
+      ld.design_valid = true;
+    } else {
+      ld.grading_name = "No Standard Fit (Target outside NLL-NUL)";
+      ld.design_valid = false;
+    }
+  }
+
+  if (!gradingEN13383 || !ld.design_valid) {
+    ld.grading_name = isArmor ? "Custom Interpolated Grading" : "Custom Interpolated Grading Underlayer";
+    let family = String(input.custom_family || "AUTO").toUpperCase();
+    if (!['HMA', 'LMA', 'CP'].includes(family)) family = selectCustomFamily(ld.target_M50_kg);
+    const interpolation = interpolateFamilyRatio(ld.target_M50_kg, family);
+    const ratio = Math.max(interpolation.ratio, 1.01);
+    const nllKg = 2.0 * targetMass / (1.0 + ratio);
+    const nulKg = ratio * nllKg;
+
+    ld.used_custom_interpolation = true;
+    ld.custom_family = family;
+    ld.custom_ratio_nul_nll = ratio;
+    ld.custom_ratio_note = interpolation.note;
+    ld.w_min_kg = nllKg;
+    ld.w_max_kg = nulKg;
+    ld.w_min_kn = nllKg * G / 1000.0;
+    ld.w_max_kn = nulKg * G / 1000.0;
+    ld.w_mean_kn = ld.target_W_kN;
+    ld.m_mean_kg = targetMass;
+    ld.actual_dn = targetDn;
+    ld.design_valid = true;
+  }
+
+  ld.thickness = 2.0 * ld.actual_dn;
+  const porosity = 0.30;
+  ld.packing_density = 100.0 * 2.0 * (1.0 - porosity) / Math.pow(ld.actual_dn, 2);
+  return ld;
+}
+
+function fmtRow(label, value, unit, precision) {
+  return `${padRight(label, 35)} | ${padRight(fixed(value, precision), 10)} | ${unit}`;
+}
+
+function fmtHydro(label, value, unit, precision) {
+  return `${padRight(label, 40)} | ${padRight(fixed(value, precision), 10)} | ${unit}`;
+}
+
+function fmtLine(label, value) {
+  return `   ${padRight(label, 36)}: ${value}`;
+}
+
+function solve(input) {
+  const report = {
+    inputs: { ...input },
+    derived: {},
+    hydro: {},
+    comparison: [],
+    recommended: null,
+    justification: [],
+    armor_layer: null,
+    underlayer: null,
+    log: []
+  };
+
+  const dp = {
+    cot_alpha: input.slope_m,
+    alpha_rad: Math.atan(1.0 / input.slope_m),
+    alpha_deg: Math.atan(1.0 / input.slope_m) * 180.0 / Math.PI,
+    Delta: input.rho_r / input.rho_w - 1.0,
+    Cp: Math.pow(1.0 + Math.pow(input.D_ratio, 0.3), 0.6),
+    N_waves: input.duration * 3600.0 / input.Tm10
+  };
+  report.derived = dp;
+  const log = (line) => report.log.push(line);
+
+  log("ROCK SLOPE STABILITY CALCULATOR");
+  log("\n" + repeat("=", 95));
+  log("   1. DESIGN INPUT PARAMETERS");
+  log(repeat("=", 95));
+  log(`${padRight("PARAMETER", 35)} | ${padRight("VALUE", 10)} | UNIT`);
+  log(repeat("-", 95));
+  log(fmtRow("Significant Wave Height (Hs)", input.Hs, "m", 2));
+  log(fmtRow("Spectral Period (Tm-1,0)", input.Tm10, "s", 2));
+  log(fmtRow("Water Depth (h_toe)", input.h_toe, "m", 2));
+  log(`${padRight("Structure Slope", 35)} | ${padRight(`1:${fixed(input.slope_m, 2)}`, 10)} | (V:H)`);
+  log(`${padRight("Foreshore Slope", 35)} | ${padRight(`1:${fixed(input.foreshore_m, 2)}`, 10)} | (V:H)`);
+  log(fmtRow("Permeability (P_notional)", input.P, "(-)", 2));
+  log(fmtRow("Physical Permeability (Cp)", dp.Cp, "(-)", 2));
+  log(fmtRow("Damage Level (S)", input.Sd, "(-)", 1));
+  log(repeat("-", 95));
+
+  report.hydro = analyzeHydraulics(input, dp);
+  log("\n" + repeat("=", 95));
+  log("   2. CALCULATED HYDRAULIC PARAMETERS");
+  log(repeat("=", 95));
+  log(`${padRight("PARAMETER", 40)} | ${padRight("VALUE", 10)} | UNIT`);
+  log(repeat("-", 95));
+  log(fmtHydro("Deep Water Wavelength (L0)", report.hydro.L0, "m", 2));
+  log(fmtHydro("Wavelength at Toe (L_toe)", report.hydro.L_toe, "m", 2));
+  log(fmtHydro("Wave Celerity at Toe (C)", report.hydro.C, "m/s", 2));
+  log(fmtHydro("Group Celerity at Toe (Cg)", report.hydro.Cg, "m/s", 2));
+  log(fmtHydro("Deep Water Steepness (s_m-1,0)", report.hydro.s_m10, "(-)", 5));
+  log(fmtHydro("Local Wave Steepness (s_local)", report.hydro.s_local, "(-)", 5));
+  log(fmtHydro("Surf Similarity (xi_m-1,0)", report.hydro.xi_m10, "(-)", 2));
+  log(`${padRight("Breaker Type (Visual/Physical)", 40)} | ${padRight(report.hydro.breaker_type, 10)} | (-)`);
+  log(fmtHydro("Relative Depth (h/Hm0)", report.hydro.rel_depth, "(-)", 2));
+  log(fmtHydro("Relative Depth (h/L0)", report.hydro.rel_depth * report.hydro.s_m10, "(-)", 3));
+  log(`${padRight("Hydraulic Zone", 40)} | ${padRight(report.hydro.zone_desc, 40)}`);
+  log(repeat("-", 95));
+
+  report.comparison.push(calcHudson(input, dp, report.hydro));
+  report.comparison.push(calcVdm2021(input, dp, report.hydro));
+  report.comparison.push(calcVanGentModified(input, dp, report.hydro));
+  report.comparison.push(calcVanGentSimplified(input, dp, report.hydro));
+  report.comparison.push(calcEldrup(input, dp, report.hydro));
+  report.comparison.push(calcEs2020(input, dp, report.hydro));
+  report.comparison.push(calcModifiedVG(input, dp, report.hydro));
+  report.comparison.push(calcModifiedES(input, dp, report.hydro));
+
+  log("\n" + repeat("=", 95));
+  log("   3. FORMULA SELECTION & JUSTIFICATION");
+  log(repeat("=", 95));
+  selectRecommendation(report);
+
+  log("COMPARISON OF RESULTS:");
+  log(`${padRight("Method", 30)} | ${padRight("Ns (-)", 8)} | ${padRight("Dn50 (m)", 10)} | ${padRight("M50 (kg)", 10)} | ${padRight("Kd_eq (-)", 8)} | NOTES`);
+  log(repeat("-", 115));
+  for (const result of report.comparison) {
+    if (!result.valid) continue;
+    const mass = input.rho_r * Math.pow(result.Dn50, 3);
+    log(`${padRight(result.name, 30)} | ${padRight(fixed(result.Ns, 4), 8)} | ${padRight(fixed(result.Dn50, 3), 10)} | ${padRight(fixed(mass, 0), 10)} | ${padRight(fixed(result.Kd, 2), 8)} | ${result.note}`);
+  }
+  log("\nJUSTIFICATION & ANALYSIS:");
+  for (const line of report.justification) log(line);
+  log(repeat("-", 95));
+  return report;
+}
+
+function finalizeDesign(report) {
+  const input = report.inputs;
+  const log = (line) => report.log.push(line);
+
+  const targetDn = report.recommended.Dn50;
+  const targetMass = input.rho_r * Math.pow(targetDn, 3);
+  report.armor_layer = designLayer(targetMass, targetDn, true, input);
+
+  log("\n" + repeat("=", 95));
+  if (input.use_en13383) log("   4. ROCK ARMOUR LAYER DESIGN (EN 13383 Standard)");
+  else log("   4. ROCK ARMOUR LAYER DESIGN (Custom Grading)");
+  log(repeat("=", 95));
+  log("PRIMARY ARMOR LAYER");
+  log(`   Theoretical Required W    : ${fixed(report.armor_layer.target_W_kN, 2)} kN`);
+  log(`   Theoretical Required M50  : ${fixed(report.armor_layer.target_M50_kg, 0)} kg`);
+  log(`   Theoretical Required Dn50 : ${fixed(report.armor_layer.target_Dn_m, 3)} m`);
+  log(repeat("-", 40));
+
+  writeLayerDetails(report.armor_layer, input, log, true);
+  log(repeat("-", 95));
+
+  const refMassArmor = input.use_en13383
+    ? 0.5 * (report.armor_layer.w_min_kg + report.armor_layer.w_max_kg)
+    : report.armor_layer.m_mean_kg;
+  const targetMassUl = refMassArmor / 10.0;
+  const targetDnUl = Math.pow(targetMassUl / input.rho_r, 1.0 / 3.0);
+  report.underlayer = designLayer(targetMassUl, targetDnUl, false, input);
+
+  log("UNDERLAYER (FILTER LAYER)");
+  log(`   Target Weight (M50 / 10)  : ${fixed(report.underlayer.target_W_kN, 3)} kN`);
+  log(`   Target Mass (M50 / 10)    : ${fixed(report.underlayer.target_M50_kg, 1)} kg`);
+  log(repeat("-", 40));
+  writeLayerDetails(report.underlayer, input, log, false);
+  log(repeat("=", 95));
+}
+
+function writeLayerDetails(layer, input, log, isArmor) {
+  if (!layer.design_valid && input.use_en13383) {
+    log(isArmor
+      ? "   [WARNING] No standard EN13383 grading found for this mass."
+      : "   [WARNING] No suitable standard underlayer grading found.");
+    return;
+  }
+
+  log(fmtLine("Adopted rock grading", layer.grading_name));
+  const NLL = layer.w_min_kg;
+  const NUL = layer.w_max_kg;
+  const ELL = 0.7 * NLL;
+  const EUL = 1.5 * NUL;
+
+  if (input.use_en13383) {
+    const repM50 = 0.5 * (NLL + NUL);
+    log(fmtLine("Representative M50", `${fixed(repM50, 1)} kg`));
+    log(fmtLine("Nominal lower limit (NLL)", `${fixed(NLL, 1)} kg`));
+    log(fmtLine("Nominal upper limit (NUL)", `${fixed(NUL, 1)} kg`));
+    log(fmtLine("Extreme lower limit (ELL)", `${fixed(ELL, 1)} kg`));
+    log(fmtLine("Extreme upper limit (EUL)", `${fixed(EUL, 1)} kg`));
+  } else {
+    log(fmtLine("Custom family basis", layer.custom_family));
+    log(fmtLine("Interpolated ratio (NUL/NLL)", fixed(layer.custom_ratio_nul_nll, 3)));
+    log(fmtLine("Interpolation rule", layer.custom_ratio_note));
+    log(fmtLine("Representative M50", `${fixed(layer.m_mean_kg, 1)} kg`));
+    log(fmtLine("Nominal lower limit (NLL)", `${fixed(NLL, 1)} kg`));
+    log(fmtLine("Nominal upper limit (NUL)", `${fixed(NUL, 1)} kg`));
+    log(fmtLine("Extreme lower limit (ELL)", `${fixed(ELL, 1)} kg`));
+    log(fmtLine("Extreme upper limit (EUL)", `${fixed(EUL, 1)} kg`));
+  }
+
+  log(fmtLine("Nominal Diameter (Dn_rock)", `${fixed(layer.actual_dn, 3)} m`));
+  log(fmtLine("Double Layer Thickness", `${fixed(layer.thickness, 2)} m`));
+  log(fmtLine("Packing Density [rocks/100m2]", fixed(layer.packing_density, 2)));
+}
+
+function readInputs() {
+  return {
+    Hs: Number($("Hs").value),
+    Tm10: Number($("Tm10").value),
+    h_toe: Number($("hToe").value),
+    slope_m: Number($("slopeM").value),
+    foreshore_m: Number($("foreshoreM").value),
+    rho_r: Number($("rhoR").value),
+    rho_w: RHO_WATER,
+    P: Number($("P").value),
+    D_ratio: Number($("dRatio").value),
+    Sd: Number($("Sd").value),
+    duration: Number($("duration").value),
+    use_en13383: $("useEN").checked,
+    formula_override_index: Number($("formula").value),
+    custom_family: "AUTO"
+  };
+}
+
+function validateInputs(input) {
+  const values = [input.Hs, input.Tm10, input.h_toe, input.slope_m, input.foreshore_m, input.rho_r, input.P, input.D_ratio, input.Sd, input.duration];
+  if (values.some((value) => !Number.isFinite(value))) return "Please enter valid numerical values in all input fields.";
+  if (input.Hs <= 0 || input.Tm10 <= 0 || input.h_toe <= 0) return "Please enter positive values for basic hydraulic parameters.";
+  return "";
+}
+
+function calculate() {
+  hideError();
+  try {
+    const input = readInputs();
+    const validationMessage = validateInputs(input);
+    if (validationMessage) {
+      showError(validationMessage);
+      return;
+    }
+
+    const report = solve(input);
+
+    if (input.formula_override_index > 0) {
+      const validResults = report.comparison.filter((result) => result.valid);
+      if (input.formula_override_index <= validResults.length) {
+        report.recommended = validResults[input.formula_override_index - 1];
+        report.log.push(`\n[MANUAL OVERRIDE] User switched selection to: ${report.recommended.name.toUpperCase()}`);
+      }
+    }
+
+    finalizeDesign(report);
+    currentResult = report;
+    currentReportText = report.log.join("\n") + "\n";
+    renderResult(report);
+  } catch (error) {
+    console.error(error);
+    showError(`Calculation error: ${error.message || error}`);
+  }
+}
+
+function renderResult(report) {
+  const recommendation = report.recommended;
+  const mass = report.inputs.rho_r * Math.pow(recommendation.Dn50, 3);
+  $("dnResult").textContent = fixed(recommendation.Dn50, 3);
+  $("massResult").textContent = fixed(mass, 0);
+  $("nsResult").textContent = fixed(recommendation.Ns, 4);
+  $("kdResult").textContent = fixed(recommendation.Kd, 2);
+  $("breakerResult").textContent = report.hydro.breaker_type;
+  $("methodResult").textContent = recommendation.name;
+  $("methodNote").textContent = recommendation.note;
+  $("zoneBadge").textContent = report.hydro.zone_desc;
+  $("armorGrading").textContent = `${report.armor_layer.grading_name} · Dn ${fixed(report.armor_layer.actual_dn, 3)} m · t ${fixed(report.armor_layer.thickness, 2)} m`;
+  $("underlayerGrading").textContent = `${report.underlayer.grading_name} · Dn ${fixed(report.underlayer.actual_dn, 3)} m · t ${fixed(report.underlayer.thickness, 2)} m`;
+
+  const body = $("comparisonBody");
+  body.innerHTML = "";
+  for (const result of report.comparison) {
+    if (!result.valid) continue;
+    const resultMass = report.inputs.rho_r * Math.pow(result.Dn50, 3);
+    const row = document.createElement("tr");
+    if (result === recommendation || (result.name === recommendation.name && result.Dn50 === recommendation.Dn50)) row.classList.add("recommended");
+    row.innerHTML = `
+      <td><span class="method-name">${escapeHtml(result.name)}</span>${row.classList.contains("recommended") ? '<span class="tag">SELECTED</span>' : ''}</td>
+      <td>${fixed(result.Ns, 4)}</td>
+      <td>${fixed(result.Dn50, 3)}</td>
+      <td>${fixed(resultMass, 0)}</td>
+      <td>${fixed(result.Kd, 2)}</td>
+      <td class="note">${escapeHtml(result.note)}</td>`;
+    body.appendChild(row);
+  }
+
+  $("reportOutput").textContent = currentReportText;
+  document.querySelector(".status-pill span:last-child").textContent = "Calculation complete";
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function showError(message) {
+  const box = $("errorBox");
+  box.textContent = message;
+  box.style.display = "block";
+  document.querySelector(".status-pill span:last-child").textContent = "Input error";
+}
+
+function hideError() {
+  const box = $("errorBox");
+  box.textContent = "";
+  box.style.display = "none";
+}
+
+function resetInputs() {
+  $("Hs").value = fixed(DEFAULTS.Hs, 2);
+  $("Tm10").value = fixed(DEFAULTS.Tm10, 2);
+  $("hToe").value = fixed(DEFAULTS.h_toe, 2);
+  $("slopeM").value = fixed(DEFAULTS.slope_m, 2);
+  $("foreshoreM").value = fixed(DEFAULTS.foreshore_m, 2);
+  $("rhoR").value = fixed(DEFAULTS.rho_r, 0);
+  $("P").value = fixed(DEFAULTS.P, 2);
+  $("dRatio").value = fixed(DEFAULTS.D_ratio, 2);
+  $("Sd").value = fixed(DEFAULTS.Sd, 2);
+  $("duration").value = fixed(DEFAULTS.duration, 2);
+  $("useEN").checked = DEFAULTS.use_en13383;
+  $("formula").value = "0";
+  calculate();
+}
+
+async function copyReport() {
+  if (!currentReportText) return;
+  try {
+    await navigator.clipboard.writeText(currentReportText);
+    const button = $("copyBtn");
+    const oldText = button.textContent;
+    button.textContent = "Copied";
+    setTimeout(() => { button.textContent = oldText; }, 1200);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = currentReportText;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+}
+
+function downloadReport() {
+  if (!currentReportText) return;
+  const blob = new Blob([currentReportText], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "output.txt";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+$("calculateBtn").addEventListener("click", calculate);
+$("resetBtn").addEventListener("click", resetInputs);
+$("printBtn").addEventListener("click", () => window.print());
+$("copyBtn").addEventListener("click", copyReport);
+$("downloadBtn").addEventListener("click", downloadReport);
+
+document.querySelectorAll("input, select").forEach((element) => {
+  element.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") calculate();
+  });
+});
+
+calculate();
+</script>
+</body>
+</html>
