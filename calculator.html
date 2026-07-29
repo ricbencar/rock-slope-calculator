@@ -463,34 +463,34 @@
 
       <div class="field-grid">
         <label for="Hs">Significant wave height<span class="symbol">Hs [m]</span></label>
-        <input id="Hs" type="number" step="any" value="2.00">
+        <input id="Hs" type="number" min="0" step="0.5" inputmode="decimal" value="2.00">
 
         <label for="Tm10">Spectral period<span class="symbol">Tm-1,0 [s]</span></label>
-        <input id="Tm10" type="number" step="any" value="12.00">
+        <input id="Tm10" type="number" min="0" step="0.5" inputmode="decimal" value="12.00">
 
         <label for="hToe">Water depth at toe<span class="symbol">h_toe [m]</span></label>
-        <input id="hToe" type="number" step="any" value="7.00">
+        <input id="hToe" type="number" min="0" step="any" inputmode="decimal" value="7.00">
 
         <label for="slopeM">Structure slope<span class="symbol">cot α</span></label>
-        <input id="slopeM" type="number" step="any" value="2.00">
+        <input id="slopeM" type="number" min="0" step="0.5" inputmode="decimal" value="2.00">
 
         <label for="foreshoreM">Foreshore slope<span class="symbol">cot β</span></label>
-        <input id="foreshoreM" type="number" step="any" value="30.00">
+        <input id="foreshoreM" type="number" min="0" step="any" inputmode="decimal" value="30.00">
 
         <label for="rhoR">Rock density<span class="symbol">ρr [kg/m³]</span></label>
-        <input id="rhoR" type="number" step="any" value="2650">
+        <input id="rhoR" type="number" min="0" step="any" inputmode="decimal" value="2650">
 
         <label for="P">Notional permeability<span class="symbol">P [-]</span></label>
-        <input id="P" type="number" step="any" value="0.40">
+        <input id="P" type="number" min="0" step="0.1" inputmode="decimal" value="0.40">
 
         <label for="dRatio">Core/armour diameter ratio<span class="symbol">Dcore / Dn50</span></label>
-        <input id="dRatio" type="number" step="any" value="0.30">
+        <input id="dRatio" type="number" min="0" step="0.1" inputmode="decimal" value="0.30">
 
         <label for="Sd">Damage level<span class="symbol">Sd [-]</span></label>
-        <input id="Sd" type="number" step="any" value="2.00">
+        <input id="Sd" type="number" min="0" step="0.1" inputmode="decimal" value="2.00">
 
         <label for="duration">Storm duration<span class="symbol">hours</span></label>
-        <input id="duration" type="number" step="any" value="6.00">
+        <input id="duration" type="number" min="0" step="0.5" inputmode="decimal" value="6.00">
       </div>
 
       <div class="divider"></div>
@@ -1367,7 +1367,10 @@ function readInputs() {
 function validateInputs(input) {
   const values = [input.Hs, input.Tm10, input.h_toe, input.slope_m, input.foreshore_m, input.rho_r, input.P, input.D_ratio, input.Sd, input.duration];
   if (values.some((value) => !Number.isFinite(value))) return "Please enter valid numerical values in all input fields.";
-  if (input.Hs <= 0 || input.Tm10 <= 0 || input.h_toe <= 0) return "Please enter positive values for basic hydraulic parameters.";
+  if (values.some((value) => value < 0)) return "Negative input values are not permitted.";
+  if (input.Hs <= 0 || input.Tm10 <= 0 || input.h_toe <= 0) return "Wave height, spectral period, and toe depth must be greater than zero.";
+  if (input.slope_m <= 0 || input.foreshore_m <= 0 || input.rho_r <= 0) return "Structure slope, foreshore slope, and rock density must be greater than zero.";
+  if (input.P <= 0 || input.Sd <= 0 || input.duration <= 0) return "Permeability, damage level, and storm duration must be greater than zero.";
   return "";
 }
 
@@ -1510,6 +1513,19 @@ $("resetBtn").addEventListener("click", resetInputs);
 $("printBtn").addEventListener("click", () => window.print());
 $("copyBtn").addEventListener("click", copyReport);
 $("downloadBtn").addEventListener("click", downloadReport);
+
+document.querySelectorAll('input[type="number"]').forEach((element) => {
+  element.addEventListener("keydown", (event) => {
+    if (event.key === "-" || event.key === "Subtract") event.preventDefault();
+  });
+
+  element.addEventListener("input", () => {
+    if (element.value !== "" && Number(element.value) < 0) {
+      element.value = "";
+      showError("Negative input values are not permitted.");
+    }
+  });
+});
 
 document.querySelectorAll("input, select").forEach((element) => {
   element.addEventListener("keydown", (event) => {
